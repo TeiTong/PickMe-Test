@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         PickMe
 // @namespace    http://tampermonkey.net/
-// @version      1.9.5
+// @version      1.14
 // @description  Outils pour les membres du discord AVFR
-// @author       Code : MegaMan, testeur : Ashemka (avec également du code de lelouch_di_britannia, FMaz008 et Thorvarium)
+// @author       Code : MegaMan, testeurs : Louise et Ashemka (avec également du code de lelouch_di_britannia, FMaz008 et Thorvarium)
 // @match        https://www.amazon.fr/vine/vine-items
 // @match        https://www.amazon.fr/vine/vine-items?queue=*
 // @match        https://www.amazon.fr/vine/vine-reviews*
@@ -14,22 +14,20 @@
 // @match        https://pickme.alwaysdata.net/*
 // @exclude      https://www.amazon.fr/vine/vine-items?search=*
 // @icon         https://pickme.alwaysdata.net/img/PM-ICO-2.png
-// @updateURL    https://raw.githubusercontent.com/teitong/pickme/main/PickMe.user.js
-// @downloadURL  https://raw.githubusercontent.com/teitong/pickme/main/PickMe.user.js
-// @grant        GM_xmlhttpRequest
+// @updateURL    https://raw.githubusercontent.com/teitong/pickme-test/main/PickMe.user.js
+// @downloadURL  https://raw.githubusercontent.com/teitong/pickme-test/main/PickMe.user.js
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
 // @grant        GM_registerMenuCommand
 // @grant        GM_listValues
-// @grant        unsafeWindow
 // @run-at       document-start
-// @require      https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js
+// @require      https://code.jquery.com/jquery-3.7.1.min.js
 // ==/UserScript==
 
 /*
 NOTES:
-* Votre clef API est lié à votre compte Discord
+* Votre clé API est lié à votre compte Discord
 */
 
 (function() {
@@ -94,6 +92,23 @@ NOTES:
         }
     }
 
+    function submitPost(asin) {
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = 'https://pickme.alwaysdata.net/monsieurconso/top.php';
+        form.target = '_blank';
+
+        var asinField = document.createElement('input');
+        asinField.type = 'hidden';
+        asinField.name = 'asin';
+        asinField.value = asin;
+
+        form.appendChild(asinField);
+
+        document.body.appendChild(form);
+        form.submit();
+    }
+
     function createButton(asin) {
         var container = document.createElement('div'); // Créer un conteneur pour le bouton et le texte d'explication
         container.style.display = 'inline-flex';
@@ -124,7 +139,10 @@ NOTES:
             affiliateButton.style.border = '1px solid black';
             container.appendChild(affiliateButton); // Ajouter le bouton et le texte d'explication au conteneur
         } else {
-            affiliateButton.href = `https://pickme.alwaysdata.net/monsieurconso/index.php?asin=${asin}`;
+            /*affiliateButton.onclick = function() {
+                submitPost(asin);
+            };*/
+            affiliateButton.href = `https://pickme.alwaysdata.net/monsieurconso/product.php?asin=${asin}`;
             affiliateButton.innerText = 'Acheter via PickMe';
             affiliateButton.target = '_blank';
             var infoText = document.createElement('span'); // Créer l'élément de texte d'explication
@@ -143,11 +161,10 @@ NOTES:
         return container; // Retourner le conteneur au lieu du bouton seul
     }
 
-
     //Détermine si on ajoute l'onglet Notifications
     var pageProduit = false;
     var asinProduct = getASINfromURL(window.location.href);
-    document.addEventListener('DOMContentLoaded', function() {
+    function asinReady() {
         if (asinProduct) {
             pageProduit = true;
             addButton(asinProduct);
@@ -162,7 +179,18 @@ NOTES:
             observer.observe(document.body, { childList: true, subtree: true });
             return;
         }
-    });
+    }
+
+    //Fix iPhone
+    if (document.readyState !== 'loading') {
+        asinReady();
+    }
+    else {
+        document.addEventListener('DOMContentLoaded', function () {
+            asinReady();
+        });
+    }
+
     //Notif
     //On initialise les variables utiles pour cette partie du script
     let notifEnabled = GM_getValue("notifEnabled", false);
@@ -181,6 +209,7 @@ NOTES:
     let hideWords = GM_getValue('hideWords', '');
     let filterOption = GM_getValue('filterOption', 'notifFavOnly');
     let hideEnabled = GM_getValue("hideEnabled", true);
+    let savedTheme = GM_getValue('selectedTheme', 'default');
     GM_setValue("notifEnabled", notifEnabled);
     GM_setValue("onMobile", onMobile);
     GM_setValue("shortcutNotif", shortcutNotif);
@@ -196,6 +225,7 @@ NOTES:
     GM_setValue("hideWords", hideWords);
     GM_setValue("filterOption", filterOption);
     GM_setValue("hideEnabled", hideEnabled);
+    GM_setValue("selectedTheme", savedTheme);
 
     //Convertir la date SQL en date lisible européenne
     function convertToEuropeanDate(mysqlDate) {
@@ -220,231 +250,37 @@ NOTES:
             asin: asin,
         });
 
-        return new Promise((resolve, reject) => {
-            GM_xmlhttpRequest({
-                method: "POST",
-                url: "https://pickme.alwaysdata.net/shyrka/infoasin",
-                data: formData.toString(),
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded"
-                },
-                onload: function(response) {
-                    if (response && response.status == 200) {
-                        try {
-                            const data = JSON.parse(response.responseText);
-                            const { date_last, title, linkText, linkUrl, main_image } = data;
-                            const date_last_eu = convertToEuropeanDate(date_last);
-                            resolve({ date_last_eu, title, linkText, linkUrl, main_image });
-                        } catch (error) {
-                            console.error("Erreur lors de l'analyse de la réponse JSON:", error);
-                            reject(new Error("Erreur lors de l'analyse de la réponse JSON"));
-                        }
-                    } else if (response.status == 201) {
-                        //console.log(response.status, response.responseText);
-                        resolve(response.responseText);
-                    } else {
-                        // Gérer les réponses HTTP autres que le succès (ex. 404, 500, etc.)
-                        console.error("Erreur HTTP:", response.status, response.statusText);
-                        reject(new Error(`Erreur HTTP: ${response.status} ${response.statusText}`));
-                    }
-                },
-                onerror: function(error) {
-                    console.error("Erreur de requête:", error);
-                    reject(error);
-                }
-            });
+        return fetch("https://pickme.alwaysdata.net/shyrka/infoasin", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: formData.toString()
+        })
+            .then(response => {
+            if (response.status === 200) {
+                return response.json().then(data => {
+                    const { date_last, title, linkText, linkUrl, main_image } = data;
+                    const date_last_eu = convertToEuropeanDate(date_last);
+                    return { date_last_eu, title, linkText, linkUrl, main_image };
+                }).catch(error => {
+                    console.error("Erreur lors de l'analyse de la réponse JSON:", error);
+                    throw new Error("Erreur lors de l'analyse de la réponse JSON");
+                });
+            } else if (response.status === 201) {
+                return response.text();
+            } else {
+                console.error("Erreur HTTP:", response.status, response.statusText);
+                throw new Error(`Erreur HTTP: ${response.status} ${response.statusText}`);
+            }
+        })
+            .catch(error => {
+            console.error("Erreur de requête:", error);
+            throw error;
         });
     }
 
-    //Afficher l'onglet "Favoris"
-    function mesFavoris() {
-        const MAX_FAVORIS = 200; // Limite des favoris affichés
-
-        if (apiKey && hideEnabled) {
-            // Ajouter un nouvel onglet dans le menu
-            const menu = document.querySelector('.a-tabs');
-            const newTab = document.createElement('li');
-            newTab.className = 'a-tab-heading';
-            newTab.innerHTML = '<a href="javascript:void(0);" id="favorisTab" role="tab" aria-selected="false" tabindex="-1" style="color: #f8a103;">Favoris</a>';
-            menu.appendChild(newTab);
-
-            // Ajouter le conteneur pour afficher les favoris
-            const container = document.createElement('div');
-            container.id = 'favorisContainer';
-            container.style.display = 'none';
-            container.className = 'a-container vvp-body';
-            container.innerHTML = `
-            <div class="a-box a-tab-content" role="tabpanel" tabindex="0">
-                <div class="a-box-inner">
-                    <div class="a-section vvp-tab-content">
-                        <div class="vvp-orders-table--heading-top" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h3 id="favorisCount">Favoris (0)</h3>
-                            <span class="a-button a-button-primary vvp-orders-table--action-btn">
-                                <span class="a-button-inner">
-                                    <button id="supprimerTousFavoris" class="a-button-input" aria-labelledby="supprimer-tous"></button>
-                                    <span class="a-button-text" aria-hidden="true" id="supprimer-tous">Tout supprimer</span>
-                                </span>
-                            </span>
-                        </div>
-                        <table class="a-normal vvp-orders-table">
-                            <thead>
-                                <tr class="vvp-orders-table--heading-row">
-                                    <th id="vvp-orders-table--image-col-heading"></th>
-                                    <th id="vvp-orders-table--product-title-heading" class="vvp-orders-table--text-col aok-nowrap" style="padding-bottom: 15px;">Produit</th>
-                                    <th id="vvp-orders-table--order-date-heading" class="vvp-orders-table--text-col aok-nowrap" style="padding-bottom: 10px;">Vu pour la dernière fois</th>
-                                    <th id="vvp-orders-table--actions-col-heading"></th>
-                                </tr>
-                            </thead>
-                            <tbody id="favorisList"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        `;
-            document.querySelector('#a-page > div.a-container.vvp-body > div.a-tab-container.vvp-tab-set-container').appendChild(container);
-
-            // Ajouter du style pour l'espace au-dessus de la première ligne de produit
-            const style = document.createElement('style');
-            style.textContent = `
-            tr:first-child td, tr:first-child th {
-                padding-top: 15px;
-            }
-        `;
-            document.head.appendChild(style);
-
-            // Fonction pour afficher les favoris
-            async function afficherFavoris() {
-                const favorisList = document.getElementById('favorisList');
-                favorisList.innerHTML = ''; // Réinitialiser la liste des favoris
-
-                const favoris = [];
-                const promises = Object.keys(localStorage).map(async (key) => {
-                    if (key.endsWith('_favori')) {
-                        const favori = JSON.parse(localStorage.getItem(key));
-                        if (favori.estFavori === true) {
-                            const asin = key.split('_favori')[0]; // Extraire l'ASIN de la clé
-                            try {
-                                const productInfo = await infoProduct(asin); // Appel à la fonction infoProduct avec l'ASIN
-                                const lastSeenDate = productInfo.date_last_eu ? parseEuropeanDate(productInfo.date_last_eu) : null;
-                                const timeDiff = lastSeenDate ? new Date() - lastSeenDate : 0;
-                                favoris.push({ asin, key, productInfo, timeDiff });
-                            } catch (error) {
-                                console.error("Erreur lors de la récupération des informations du produit:", error);
-                            }
-                        }
-                    }
-                });
-
-                await Promise.all(promises);
-
-                // Trier les favoris : ceux avec timeDiff = 0 en premier, puis par timeDiff croissant
-                favoris.sort((a, b) => {
-                    if (a.timeDiff === 0) return -1;
-                    if (b.timeDiff === 0) return 1;
-                    return a.timeDiff - b.timeDiff;
-                });
-
-                // Limiter les favoris à MAX_FAVORIS
-                const favorisAffiches = favoris.slice(0, MAX_FAVORIS);
-
-                // Mettre à jour le titre avec le nombre de favoris affichés
-                document.querySelector('#favorisCount').textContent = `Favoris (${favorisAffiches.length})`;
-
-                // Fonction pour convertir une date européenne en format de date interprétable
-                function parseEuropeanDate(dateStr) {
-                    const [day, month, year, hours, minutes, seconds] = dateStr.split(/[/ :]/);
-                    return new Date(`${year}-${month}-${day}T${hours}:${minutes}:${seconds}`);
-                }
-
-                // Afficher les favoris triés
-                favorisAffiches.forEach(({ asin, key, productInfo, timeDiff }) => {
-                    const tr = document.createElement('tr');
-                    tr.className = 'vvp-orders-table--row';
-                    const urlProduct = "https://www.amazon.fr/dp/" + asin;
-                    if (productInfo == "ASIN absent") {
-                        tr.innerHTML = `
-                        <td class="vvp-orders-table--image-col"><img alt="${asin}" src="https://pickme.alwaysdata.net/img/Pas-d-image-disponible-svg.png"></td>
-                        <td class="vvp-orders-table--text-col"><a class="a-link-normal" target="_blank" rel="noopener" href="${urlProduct}">Recommandation ou produit inconnu : ${asin}</a></td>
-                        <td class="vvp-orders-table--text-col"><strong>N/A</strong></td>
-                        <td class="vvp-orders-table--actions-col"><span class="a-button a-button-primary vvp-orders-table--action-btn" style="margin-left: 10px; margin-right: 10px;"><span class="a-button-inner"><button data-key="${key}" class="a-button-input supprimerFavori" aria-labelledby="supprimer-${key}">Supprimer</button><span class="a-button-text" aria-hidden="true" id="supprimer-${key}">Supprimer</span></span></span></td>
-                    `;
-                    } else if (!productInfo.main_image && productInfo.title) {
-                        tr.innerHTML = `
-                        <td class="vvp-orders-table--image-col"><img alt="${asin}" src="https://pickme.alwaysdata.net/img/Pas-d-image-disponible-svg.png"></td>
-                        <td class="vvp-orders-table--text-col"><a class="a-link-normal" target="_blank" rel="noopener" href="${urlProduct}">Produit indisponible : ${productInfo.title}</a></td>
-                        <td class="vvp-orders-table--text-col"><strong>N/A</strong></td>
-                        <td class="vvp-orders-table--actions-col"><span class="a-button a-button-primary vvp-orders-table--action-btn" style="margin-left: 10px; margin-right: 10px;"><span class="a-button-inner"><button data-key="${key}" class="a-button-input supprimerFavori" aria-labelledby="supprimer-${key}">Supprimer</button><span class="a-button-text" aria-hidden="true" id="supprimer-${key}">Supprimer</span></span></span></td>
-                    `;
-                    } else if (productInfo.title) {
-                        // Vérifier la date et appliquer la couleur appropriée
-                        let dateColor = '';
-
-                        const hoursDiff = timeDiff / (1000 * 60 * 60);
-                        const minutesDiff = timeDiff / (1000 * 60);
-
-                        if (hoursDiff > 12) {
-                            dateColor = 'color: #FF0000;';
-                        } else if (minutesDiff < 1) {
-                            dateColor = 'color: #007FFF;';
-                        }
-                        tr.innerHTML = `
-                        <td class="vvp-orders-table--image-col"><img alt="${productInfo.title}" src="${productInfo.main_image}"></td>
-                        <td class="vvp-orders-table--text-col"><a class="a-link-normal" target="_blank" rel="noopener" href="${urlProduct}">${productInfo.title}</a></td>
-                        <td class="vvp-orders-table--text-col" style="${dateColor}"><strong>${productInfo.date_last_eu}</strong><br><a class="a-link-normal" target="_blank" rel="noopener" href="${productInfo.linkUrl}">${productInfo.linkText}</a></td>
-                        <td class="vvp-orders-table--actions-col"><span class="a-button a-button-primary vvp-orders-table--action-btn" style="margin-left: 10px; margin-right: 10px;"><span class="a-button-inner"><button data-key="${key}" class="a-button-input supprimerFavori" aria-labelledby="supprimer-${key}">Supprimer</button><span class="a-button-text" aria-hidden="true" id="supprimer-${key}">Supprimer</span></span></span></td>
-                    `;
-                    }
-                    favorisList.appendChild(tr);
-                });
-
-                // Ajouter des écouteurs d'événement pour les boutons de suppression
-                document.querySelectorAll('.supprimerFavori').forEach(button => {
-                    button.addEventListener('click', function() {
-                        const key = this.getAttribute('data-key');
-                        localStorage.removeItem(key);
-                        const listItem = this.closest('tr');
-                        if (listItem) {
-                            listItem.remove(); // Supprimer la ligne correspondante
-                        }
-                        // Mettre à jour le titre avec le nombre de favoris affichés
-                        const nbFavorisRestants = document.querySelectorAll('#favorisList .vvp-orders-table--row').length;
-                        document.querySelector('#favorisCount').textContent = `Favoris (${nbFavorisRestants})`;
-                    });
-                });
-            }
-
-            // Fonction pour supprimer tous les favoris
-            function supprimerTousLesFavoris() {
-                if (confirm('Êtes-vous sûr de vouloir supprimer tous les favoris ?')) {
-                    Object.keys(localStorage).forEach(key => {
-                        if (key.endsWith('_favori')) {
-                            localStorage.removeItem(key);
-                        }
-                    });
-                    afficherFavoris(); // Rafraîchir la liste des favoris
-                }
-            }
-
-            // Ajouter le gestionnaire d'événement pour le bouton "Supprimer tous les favoris"
-            document.getElementById('supprimerTousFavoris').addEventListener('click', supprimerTousLesFavoris);
-
-            // Afficher le conteneur des favoris lors du clic sur le nouvel onglet
-            document.getElementById('favorisTab').addEventListener('click', function() {
-                document.querySelectorAll('.a-tab-heading').forEach(tab => {
-                    tab.classList.remove('a-active');
-                });
-                this.parentElement.classList.add('a-tab-heading', 'a-active');
-                this.setAttribute('aria-selected', 'true');
-                document.querySelectorAll('.a-box-tab').forEach(box => {
-                    box.style.display = 'none';
-                });
-                container.style.display = 'block';
-                afficherFavoris();
-            });
-        }
-    }
-
-    // Fonction pour demander la permission et afficher la notification
+    //Fonction pour demander la permission et afficher la notification
     function requestNotification(title, text, icon, queue = null, page = null) {
         if (!("Notification" in window)) {
             console.log("Ce navigateur ne supporte pas les notifications de bureau.");
@@ -497,7 +333,7 @@ NOTES:
         }
     }
 
-    // Fonction pour afficher la notification sur PC
+    //Fonction pour afficher la notification sur PC
     function showNotification(title, text, icon, queue = null, page = null) {
         var notification = new Notification(title, {
             body: text || "",
@@ -525,13 +361,6 @@ NOTES:
         };
     }
 
-    //Affichage de l'onglet "Favoris"
-    document.addEventListener("DOMContentLoaded", function() {
-        if (window.location.href.startsWith('https://www.amazon.fr/vine/vine-items')) {
-            mesFavoris();
-        }
-    });
-
     //Ecoute des messages entrants
     if (notifEnabled && apiKey) {
         var lastNotifId = null;
@@ -539,11 +368,39 @@ NOTES:
             var titleContentLower;
             if (filterOption == "notifFavOnly") {
                 var favWordsTrimNotif = favWords.trim();
-                var favArrayNotif = favWordsTrimNotif.length > 0 ? favWordsTrimNotif.split(',').map(mot => mot.toLowerCase().trim().replace(/\s+/g, '')).filter(mot => mot.length > 0) : [];
+                var favArrayNotif = favWordsTrimNotif.length > 0
+                ? favWordsTrimNotif.split(',').map(pattern => {
+                    pattern = pattern.trim();
+                    if (pattern.length > 0) {
+                        try {
+                            return new RegExp(pattern, 'i');
+                        } catch (e) {
+                            console.error('Expression regex invalide :', pattern, e);
+                            return null;
+                        }
+                    } else {
+                        return null;
+                    }
+                }).filter(regex => regex != null)
+                : [];
 
             } else if (filterOption == "notifExcludeHidden") {
                 var hiddenWordsTrimNotif = hideWords.trim();
-                var hiddenArrayNotif = hiddenWordsTrimNotif.length > 0 ? hiddenWordsTrimNotif.split(',').map(mot => mot.toLowerCase().trim().replace(/\s+/g, '')).filter(mot => mot.length > 0) : [];
+                var hiddenArrayNotif = hiddenWordsTrimNotif.length > 0
+                ? hiddenWordsTrimNotif.split(',').map(pattern => {
+                    pattern = pattern.trim();
+                    if (pattern.length > 0) {
+                        try {
+                            return new RegExp(pattern, 'i');
+                        } catch (e) {
+                            console.error('Expression regex invalide :', pattern, e);
+                            return null;
+                        }
+                    } else {
+                        return null;
+                    }
+                }).filter(regex => regex != null)
+                : [];
             }
         }
         // Écouter les messages immédiatement
@@ -561,11 +418,11 @@ NOTES:
                     if (notifFav && event.data.info.toUpperCase() === "PRODUCT_AI") {
                         titleContentLower = event.data.description.toLowerCase().trim().replace(/\s+/g, '');
                         if (filterOption == "notifFavOnly") {
-                            if (favArrayNotif.length > 0 && favArrayNotif.some(mot => titleContentLower.includes(mot))) {
+                            if (favArrayNotif.length > 0 && favArrayNotif.some(regex => regex.test(titleContentLower))) {
                                 requestNotification(event.data.title, event.data.description, event.data.imageUrl, event.data.queue, event.data.page);
                             }
                         } else if (filterOption == "notifExcludeHidden") {
-                            if (hiddenArrayNotif.length > 0 && !hiddenArrayNotif.some(mot => titleContentLower.includes(mot))) {
+                            if (hiddenArrayNotif.length > 0 && !hiddenArrayNotif.some(regex => regex.test(titleContentLower))) {
                                 requestNotification(event.data.title, event.data.description, event.data.imageUrl, event.data.queue, event.data.page);
                             }
                         }
@@ -576,7 +433,7 @@ NOTES:
             }
         });
 
-        document.addEventListener("DOMContentLoaded", function() {
+        function addNotifTab() {
             if (window.location.hostname !== "pickme.alwaysdata.net") {
                 // Initialisation de l'iframe seulement si on est sur le bon domaine
                 var iframe = document.createElement('iframe');
@@ -615,7 +472,66 @@ NOTES:
                     tabsContainer.appendChild(newTab1);
                 }
             }
+        }
+
+        //Fix iPhone
+        if (document.readyState !== 'loading') {
+            addNotifTab();
+        }
+        else {
+            document.addEventListener('DOMContentLoaded', function () {
+                addNotifTab()
+            });
+        }
+    }
+
+    // Fonction pour charger le fichier CSS
+    function loadCSS(url) {
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.type = 'text/css';
+        link.href = url;
+        document.getElementsByTagName('head')[0].appendChild(link);
+    }
+
+    //URL des CSS
+    var baseURLCSS = 'https://pickme.alwaysdata.net/';
+
+    //Gestion des favoris sur PickMe Web
+    if (window.location.hostname === "pickme.alwaysdata.net" && /^\/[^\/]+\.php$/.test(window.location.pathname)) {
+        if (savedTheme == "dark") {
+            loadCSS(baseURLCSS + "style-dark.css");
+        }
+        document.addEventListener('click', function(event) {
+            //Vérifier si l'élément cliqué a la classe 'favori-icon'
+            if (event.target.classList.contains('favori-icon')) {
+                //let dataId = event.target.getAttribute('data-id');
+                let dataFavori = event.target.getAttribute('data-favori');
+                let dataAsin = event.target.getAttribute('data-asin');
+                if (dataFavori == 1) {
+                    GM_setValue(dataAsin +'_f', '1');
+                } else if (dataFavori == 0) {
+                    GM_deleteValue(dataAsin + '_f');
+                }
+            }
         });
+        //Auto log si on a pickme installé
+        //On check s'il y a la zone de saisie de la clé API
+        const apiKeyInput = document.querySelector('input[type="text"].form-control#api_key[name="api_key"][required]');
+
+        //Vérifie si le message d'erreur n'est PAS présent
+        const errorAlert = document.querySelector('div.alert.alert-danger');
+        //Récupère le dernier moment de redirection enregistré pour éviter de le faire en boucle
+        const lastRedirect = localStorage.getItem('lastRedirectTime');
+        const now = Date.now();
+        //On le fait seulement s'il y a le champ de saisie, mais sans le message d'erreur et si pas fait depuis plus de 1 minute
+        if (apiKeyInput && !errorAlert && (!lastRedirect || now - lastRedirect > 60000)) {
+            if (apiKey) {
+                localStorage.setItem('lastRedirectTime', now);
+                const redirectUrl = "https://pickme.alwaysdata.net/search.php?key=" + encodeURIComponent(apiKey);
+                window.location.href = redirectUrl;
+            }
+        }
     }
 
     //Popup pour le bloc-notes
@@ -703,51 +619,51 @@ NOTES:
         }
     }
 
-    if (urlPattern.test(window.location.href)) {
-        document.addEventListener("DOMContentLoaded", function() {
-            if (!pageProduit && window.location.href.indexOf("vine") !== -1) {
-                // Sélectionner le conteneur des onglets
-                var tabsContainer = document.querySelector('.a-tabs');
 
-                // Créer le nouvel onglet pour Pickme Web
-                var newTab2 = document.createElement('li');
-                newTab2.className = 'a-tab-heading';
-                newTab2.role = 'presentation';
+    function addTab() {
+        if (!pageProduit && window.location.href.indexOf("vine") !== -1 && apiKey) {
+            // Sélectionner le conteneur des onglets
+            var tabsContainer = document.querySelector('.a-tabs');
 
-                // Créer le lien à ajouter dans le nouvel onglet Pickme Web
-                var link2 = document.createElement('a');
-                link2.href = "https://pickme.alwaysdata.net/search.php?key=" + encodeURIComponent(apiKey);
-                link2.role = 'tab';
-                link2.setAttribute('aria-selected', 'false');
-                link2.tabIndex = -1;
-                link2.textContent = 'PickMe Web';
-                link2.target = '_blank';
-                link2.style.color = '#f8a103';
-                link2.style.backgroundColor = 'transparent';
-                link2.style.border = 'none';
+            // Créer le nouvel onglet pour Pickme Web
+            var newTab2 = document.createElement('li');
+            newTab2.className = 'a-tab-heading';
+            newTab2.role = 'presentation';
 
-                // Ajouter le lien au nouvel onglet Pickme Web
-                newTab2.appendChild(link2);
+            // Créer le lien à ajouter dans le nouvel onglet Pickme Web
+            var link2 = document.createElement('a');
+            link2.href = "https://pickme.alwaysdata.net/search.php?key=" + encodeURIComponent(apiKey);
+            link2.role = 'tab';
+            link2.setAttribute('aria-selected', 'false');
+            link2.tabIndex = -1;
+            link2.textContent = 'PickMe Web';
+            link2.target = '_blank';
+            link2.style.color = '#f8a103';
+            link2.style.backgroundColor = 'transparent';
+            link2.style.border = 'none';
 
-                // Créer le nouvel onglet pour Bloc-notes
-                var newTab3 = document.createElement('li');
-                newTab3.className = 'a-tab-heading';
-                newTab3.role = 'presentation';
+            // Ajouter le lien au nouvel onglet Pickme Web
+            newTab2.appendChild(link2);
 
-                // Créer le lien à ajouter dans le nouvel onglet Bloc notes
-                var link3 = document.createElement('a');
-                link3.href = "#"; // Garder un lien neutre
-                link3.role = 'tab';
-                link3.setAttribute('aria-selected', 'false');
-                link3.tabIndex = -1;
-                link3.textContent = 'Bloc-notes';
-                link3.target = '_blank';
-                link3.style.color = '#f8a103';
-                link3.style.backgroundColor = 'transparent';
-                link3.style.border = 'none';
+            // Créer le nouvel onglet pour Bloc-notes
+            var newTab3 = document.createElement('li');
+            newTab3.className = 'a-tab-heading';
+            newTab3.role = 'presentation';
 
-                // Créer l'image à ajouter devant le texte "Bloc-notes"
-                /*var image = document.createElement('img');
+            // Créer le lien à ajouter dans le nouvel onglet Bloc notes
+            var link3 = document.createElement('a');
+            link3.href = "#"; // Garder un lien neutre
+            link3.role = 'tab';
+            link3.setAttribute('aria-selected', 'false');
+            link3.tabIndex = -1;
+            link3.textContent = 'Bloc-notes';
+            link3.target = '_blank';
+            link3.style.color = '#f8a103';
+            link3.style.backgroundColor = 'transparent';
+            link3.style.border = 'none';
+
+            // Créer l'image à ajouter devant le texte "Bloc-notes"
+            /*var image = document.createElement('img');
                 image.src = 'https://pickme.alwaysdata.net/img/loupe.png';
                 image.alt = 'Loupe';
                 image.style.cursor = 'pointer';
@@ -755,14 +671,14 @@ NOTES:
                 image.style.width = '14px';
                 image.style.height = '14px';*/
 
-                // Ajouter l'événement onclick pour appeler la fonction setNote pour le lien
-                link3.onclick = function(event) {
-                    event.preventDefault(); // Empêche le lien de suivre l'URL
-                    setNote();
-                };
+            // Ajouter l'événement onclick pour appeler la fonction setNote pour le lien
+            link3.onclick = function(event) {
+                event.preventDefault(); // Empêche le lien de suivre l'URL
+                setNote();
+            };
 
-                // Ajouter l'événement onclick pour afficher la note stockée lors du clic sur l'image
-                /*image.onclick = function(event) {
+            // Ajouter l'événement onclick pour afficher la note stockée lors du clic sur l'image
+            /*image.onclick = function(event) {
                     event.preventDefault(); // Empêche toute action par défaut
                     event.stopPropagation(); // Empêche la propagation du clic au lien
                     const noteContent = GM_getValue("noteContent", "");
@@ -772,17 +688,16 @@ NOTES:
                 // Ajouter l'image et le texte "Bloc-notes" au lien
                 link3.prepend(image);*/
 
-                // Ajouter le lien dans le nouvel onglet
-                newTab3.appendChild(link3);
+            // Ajouter le lien dans le nouvel onglet
+            newTab3.appendChild(link3);
 
-                // Ajouter les nouveaux onglets au conteneur des onglets
-                if (tabsContainer) {
-                    tabsContainer.appendChild(newTab3);
-                    //tabsContainer.appendChild(newTab1);
-                    tabsContainer.appendChild(newTab2);
-                }
+            // Ajouter les nouveaux onglets au conteneur des onglets
+            if (tabsContainer) {
+                tabsContainer.appendChild(newTab3);
+                //tabsContainer.appendChild(newTab1);
+                tabsContainer.appendChild(newTab2);
             }
-        });
+        }
     }
 
     if (asinProduct) {
@@ -794,7 +709,7 @@ NOTES:
         const titleElement = 'meta[name="title"]';
         const descriptionElement = 'meta[name="description"]';
         const localBlockSelectors = ['.cr-widget-FocalReviews', '#cm_cr-review_list'];
-        const rBlockClass = '.a-section.review';
+        const rBlockClass = '[data-hook="review"]';
         const pRowSelectors = ['.genome-widget-row', '[data-hook="genome-widget"]'];
         const pLinkClass = '.a-profile';
         const bSelectors = ['[data-hook="linkless-vine-review-badge"]', '[data-hook="linkless-format-strip-whats-this"]'];
@@ -833,21 +748,12 @@ NOTES:
                     current: window.location.href,
                     urls: JSON.stringify(pUrls),
                 });
-                return new Promise((resolve, reject) => {
-                    GM_xmlhttpRequest({
-                        method: "POST",
-                        url: "https://pickme.alwaysdata.net/shyrka/omh",
-                        data: formData.toString(),
-                        headers: {
-                            "Content-Type": "application/x-www-form-urlencoded"
-                        },
-                        onload: function(response) {
-                            resolve(response);
-                        },
-                        onerror: function(error) {
-                            reject(error);
-                        }
-                    });
+                return fetch("https://pickme.alwaysdata.net/shyrka/omh", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    body: formData.toString()
                 });
             }
         }
@@ -909,22 +815,19 @@ NOTES:
     //Solution alternative end
 
     //Code pour PickMe Web
-    document.addEventListener('DOMContentLoaded', function() {
+    function favPickmeWeb() {
         if (window.location.href === 'https://pickme.alwaysdata.net/search.php') {
-
             // Rechercher le tableau avec l'ID "resultsTable"
             let table = document.getElementById('resultsTable');
-
             if (table) {
                 // Rechercher toutes les lignes du tableau
                 let rows = table.querySelectorAll('tr[id^="ligne_"]');
-
                 rows.forEach(row => {
                     // Extraire l'ASIN de l'ID de la ligne
                     let asin = row.id.split('_')[1];
 
                     // Vérifier si l'ASIN est déjà favori
-                    let isFavori = GM_getValue(asin + '_favori', null);
+                    let isFavori = GM_getValue(asin + '_f', null);
 
                     // Trouver la cellule de page
                     let pageCell = row.querySelector('td[id^="page_"]');
@@ -946,13 +849,13 @@ NOTES:
                             e.preventDefault();
                             if (isFavori) {
                                 // Supprimer le favori
-                                GM_deleteValue(asin + '_favori');
+                                GM_deleteValue(asin + '_f');
                                 img.src = 'https://pickme.alwaysdata.net/img/coeurgris2.png';
                                 img.alt = 'Ajouter aux favoris';
                                 isFavori = null;
                             } else {
                                 // Ajouter aux favoris
-                                GM_setValue(asin +'_favori', { estFavori: true });
+                                GM_setValue(asin +'_f', '1');
                                 img.src = 'https://pickme.alwaysdata.net/img/coeurrouge2.png';
                                 img.alt = 'Favori';
                                 isFavori = true;
@@ -967,7 +870,17 @@ NOTES:
                 });
             }
         }
-    });
+    }
+
+    //Fix iPhone
+    if (document.readyState !== 'loading') {
+        favPickmeWeb();
+    }
+    else {
+        document.addEventListener('DOMContentLoaded', function () {
+            favPickmeWeb()
+        });
+    }
     //End PickMe Web
 
     // Convertir les motifs en une expression régulière
@@ -997,7 +910,58 @@ NOTES:
         }
     }
 
-    document.addEventListener('DOMContentLoaded', function() {
+    function runPickMe() {
+
+        //Debug, générer des données
+        /*const nombreEntrees = 100000; // Nombre d'entrées à générer
+
+        for (let i = 0; i < nombreEntrees; i++) {
+            const key = `${i}_c`; // Générer une clé unique se terminant par _c
+            localStorage.setItem(key, '0'); // Définir la valeur à '0'
+        }*/
+
+        //Convertir le stockage des cachés et favoris suite à la 1.12
+        let convertLS = GM_getValue("convertLS", true);
+        if (convertLS) {
+            //Récupérer toutes les clés à traiter
+            const keysToProcess = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.endsWith('_favori') || key.endsWith('_cache')) {
+                    keysToProcess.push(key);
+                }
+            }
+
+            //Traiter chaque clé
+            keysToProcess.forEach((key) => {
+                const value = localStorage.getItem(key);
+                let newKey;
+                let newValue;
+
+                if (key.endsWith('_favori')) {
+                    const data = JSON.parse(value);
+                    if (data) {
+                        const estFavori = data.estFavori;
+                        newKey = key.replace('_favori', '_f');
+                        newValue = estFavori ? '1' : '0';
+                    }
+
+                } else if (key.endsWith('_cache')) {
+                    const data = JSON.parse(value);
+                    if (data) {
+                        const estCache = data.estCache;
+                        newKey = key.replace('_cache', '_c');
+                        newValue = estCache ? '0' : '1';
+                    }
+                }
+
+                //Enregistre la nouvelle clé et valeur
+                localStorage.setItem(newKey, newValue);
+                //Supprime l'ancienne clé
+                localStorage.removeItem(key);
+            });
+            GM_setValue("convertLS", false);
+        }
 
         var version = GM_info.script.version;
 
@@ -1011,23 +975,30 @@ NOTES:
 
         let highlightColor = GM_getValue("highlightColor", "rgba(255, 255, 0, 0.5)");
         let highlightColorFav = GM_getValue("highlightColorFav", "rgba(255, 0, 0, 0.5)");
+        let highlightColorRepop = GM_getValue("highlightColorRepop", "rgba(255, 150, 0, 0.5)");
         let taxValue = GM_getValue("taxValue", true);
         let catEnabled = GM_getValue("catEnabled", true);
         let cssEnabled = GM_getValue("cssEnabled", false);
         let mobileEnabled = GM_getValue("mobileEnabled", false);
         let headerEnabled = GM_getValue("headerEnabled", false);
         let callUrlEnabled = GM_getValue("callUrlEnabled", false);
+        let recoHReload = GM_getValue("recoHReload", false);
 
         let statsEnabled = GM_getValue("statsEnabled", false);
         let extendedEnabled = GM_getValue("extendedEnabled", false);
+        let isParentEnabled = GM_getValue("isParentEnabled", true);
         let wheelfixEnabled = GM_getValue("wheelfixEnabled", true);
         let autohideEnabled = GM_getValue("autohideEnabled", false);
-        let savedTheme = GM_getValue('selectedTheme', 'default');
+
         let savedButtonColor = GM_getValue('selectedButtonColor', 'default');
         let fastCmdEnabled = GM_getValue('fastCmdEnabled', false);
         let ordersEnabled = GM_getValue('ordersEnabled', true);
         let ordersStatsEnabled = GM_getValue('ordersStatsEnabled', false);
         let ordersInfos = GM_getValue('ordersInfos', false);
+        let ordersPercent = GM_getValue('ordersPercent', false);
+        let fastCmd = GM_getValue('fastCmd', false);
+        let hideBas = GM_getValue('hideBas', true);
+        let statsInReviews = GM_getValue('statsInReviews', false);
 
         // Enregistrement des autres valeurs de configuration
         GM_setValue("highlightEnabled", highlightEnabled);
@@ -1036,15 +1007,18 @@ NOTES:
 
         GM_setValue("highlightColor", highlightColor);
         GM_setValue("highlightColorFav", highlightColorFav);
+        GM_setValue("highlightColorRepop", highlightColorRepop);
         GM_setValue("taxValue", taxValue);
         GM_setValue("catEnabled", catEnabled);
         GM_setValue("cssEnabled", cssEnabled);
         GM_setValue("mobileEnabled", mobileEnabled);
         GM_setValue("headerEnabled", headerEnabled);
         GM_setValue("callUrlEnabled", callUrlEnabled);
+        GM_setValue("recoHReload", recoHReload);
 
         GM_setValue("statsEnabled", statsEnabled);
         GM_setValue("extendedEnabled", extendedEnabled);
+        GM_setValue("isParentEnabled", isParentEnabled);
         GM_setValue("wheelfixEnabled", wheelfixEnabled);
         GM_setValue("autohideEnabled", autohideEnabled);
         GM_setValue("selectedTheme", savedTheme);
@@ -1053,6 +1027,10 @@ NOTES:
         GM_setValue("ordersEnabled", ordersEnabled);
         GM_setValue("ordersStatsEnabled", ordersStatsEnabled);
         GM_setValue("ordersInfos", ordersInfos);
+        GM_setValue("ordersPercent", ordersPercent);
+        GM_setValue("fastCmd", fastCmd);
+        GM_setValue("hideBas", hideBas);
+        GM_setValue("statsInReviews", statsInReviews);
 
         //Modification du texte pour l'affichage mobile
         var pageX = "Page X";
@@ -1114,23 +1092,26 @@ NOTES:
                     token: API_TOKEN,
                     url: callUrl,
                 });
-                return new Promise((resolve, reject) => {
-                    GM_xmlhttpRequest({
-                        method: "POST",
-                        url: "https://pickme.alwaysdata.net/shyrka/webhookreco",
-                        data: formData.toString(),
-                        headers: {
-                            "Content-Type": "application/x-www-form-urlencoded"
-                        },
-                        onload: function(response) {
-                            console.log(response.status, response.responseText);
-                            resolve(response);
-                        },
-                        onerror: function(error) {
-                            console.error(error);
-                            reject(error);
-                        }
+                return fetch("https://pickme.alwaysdata.net/shyrka/webhookreco", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    body: formData.toString()
+                })
+                    .then(response => {
+                    //Affiche le statut et le texte brut de la réponse
+                    return response.text().then(text => {
+                        console.log(response.status, text);
+                        return {
+                            status: response.status,
+                            responseText: text
+                        };
                     });
+                })
+                    .catch(error => {
+                    console.error(error);
+                    throw error;
                 });
             }
         }
@@ -1153,7 +1134,7 @@ NOTES:
 
                 // Redirige vers la nouvelle URL
                 window.location.href = newUrl;
-            } else {
+            } else if (userInput != null) {
                 alert("Veuillez saisir un numéro de page valide.");
             }
         }
@@ -1208,17 +1189,29 @@ NOTES:
         }
 
         function setHighlightColor() {
-            // Extraire les composantes r, g, b de la couleur actuelle
-            const rgbaMatch = highlightColor.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+),\s*(\d*\.?\d+)\)$/);
-            let hexColor = "#FFFF00"; // Fallback couleur jaune si la conversion échoue
-            if (rgbaMatch) {
-                const r = parseInt(rgbaMatch[1]).toString(16).padStart(2, '0');
-                const g = parseInt(rgbaMatch[2]).toString(16).padStart(2, '0');
-                const b = parseInt(rgbaMatch[3]).toString(16).padStart(2, '0');
-                hexColor = `#${r}${g}${b}`;
+
+            //Pour la suite, on convertit la couleur RGBA existante en format hexadécimal pour <input type="color">.
+            //Fonction helper pour extraire #rrggbb depuis un rgba(...) ou rgb(...).
+            function rgbaToHex(rgbaString, defaultHex = '#FFFF00') {
+                const rgbaMatch = rgbaString.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*(\d*\.?\d+))?\)$/);
+                if (!rgbaMatch) {
+                    return defaultHex; // Couleur par défaut (ici : jaune) si la conversion échoue
+                }
+                const r = parseInt(rgbaMatch[1], 10).toString(16).padStart(2, '0');
+                const g = parseInt(rgbaMatch[2], 10).toString(16).padStart(2, '0');
+                const b = parseInt(rgbaMatch[3], 10).toString(16).padStart(2, '0');
+                return `#${r}${g}${b}`;
             }
 
-            // Vérifie si une popup existe déjà et la supprime si c'est le cas
+            //Couleurs par défaut (au cas où highlightColor / highlightColorRepop seraient vides)
+            const defaultHexNew = '#FFFF00';
+            const defaultHexRepop = '#FF9600';
+
+            //Convertit la couleur RGBA existante en hexa
+            const hexColor = rgbaToHex(highlightColor, defaultHexNew);
+            const hexColorRepop = rgbaToHex(highlightColorRepop, defaultHexRepop);
+
+            // Vérifie si une popup existe déjà et la supprime
             const existingPopup = document.getElementById('colorPickerPopup');
             if (existingPopup) {
                 existingPopup.remove();
@@ -1237,30 +1230,52 @@ NOTES:
         background-color: white;
         border: 1px solid #ccc;
         box-shadow: 0px 0px 10px #ccc;
+        width: 300px;
     `;
+
+            // Construction du HTML de la popup, avec deux sélecteurs de couleur
             popup.innerHTML = `
-          <h2 id="configPopupHeader">Couleur de surbrillance des nouveaux produits<span id="closeColorPicker" style="float: right; cursor: pointer;">&times;</span></h2>
-        <input type="color" id="colorPicker" value="${hexColor}" style="width: 100%;">
+        <h2 id="configPopupHeader" style="margin-top: 0;">
+            Couleurs de surbrillance
+            <span id="closeColorPicker" style="float: right; cursor: pointer;">&times;</span>
+        </h2>
+        <div style="margin-bottom: 15px;">
+            <label for="colorPickerNew" style="display: block;">Nouveau produit :</label>
+            <input type="color" id="colorPickerNew" value="${hexColor}" style="width: 100%;">
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label for="colorPickerRepop" style="display: block;">Repop d'un produit :</label>
+            <input type="color" id="colorPickerRepop" value="${hexColorRepop}" style="width: 100%;">
+        </div>
         <div class="button-container final-buttons">
-            <button class="full-width" id="saveColor">Enregistrer</button>
-            <button class="full-width" id="closeColor">Fermer</button>
+            <button class="full-width" id="saveColor" style="width: 100%; margin-bottom: 5px;">Enregistrer</button>
+            <button class="full-width" id="closeColor" style="width: 100%;">Fermer</button>
         </div>
     `;
 
             document.body.appendChild(popup);
 
-            // Ajoute des écouteurs d'événement pour les boutons
             document.getElementById('saveColor').addEventListener('click', function() {
-                const selectedColor = document.getElementById('colorPicker').value;
-                // Convertir la couleur hexadécimale en RGBA pour la transparence
-                const r = parseInt(selectedColor.substr(1, 2), 16);
-                const g = parseInt(selectedColor.substr(3, 2), 16);
-                const b = parseInt(selectedColor.substr(5, 2), 16);
-                const rgbaColor = `rgba(${r}, ${g}, ${b}, 0.5)`;
+                //Récupère la valeur hex des deux color pickers
+                const selectedColorNew = document.getElementById('colorPickerNew').value;
+                const selectedColorRepop = document.getElementById('colorPickerRepop').value;
 
-                // Stocker la couleur sélectionnée
-                GM_setValue("highlightColor", rgbaColor);
-                highlightColor = rgbaColor;
+                //Convertit en RGBA
+                const hexToRgba = (hex) => {
+                    const r = parseInt(hex.substr(1, 2), 16);
+                    const g = parseInt(hex.substr(3, 2), 16);
+                    const b = parseInt(hex.substr(5, 2), 16);
+                    return `rgba(${r}, ${g}, ${b}, 0.5)`;
+                };
+
+                const rgbaColorNew = hexToRgba(selectedColorNew);
+                const rgbaColorRepop = hexToRgba(selectedColorRepop);
+
+                GM_setValue("highlightColor", rgbaColorNew);
+                GM_setValue("highlightColorRepop", rgbaColorRepop);
+                highlightColor = rgbaColorNew;
+                highlightColorRepop = rgbaColorRepop;
+
                 popup.remove();
             });
 
@@ -1273,7 +1288,7 @@ NOTES:
         }
 
         function setHighlightColorFav() {
-            // Extraire les composantes r, g, b de la couleur actuelle
+            //Extraire les composantes r, g, b de la couleur actuelle
             const rgbaMatch = highlightColorFav.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+),\s*(\d*\.?\d+)\)$/);
             let hexColor = "#FF0000"; // Fallback couleur jaune si la conversion échoue
             if (rgbaMatch) {
@@ -1283,13 +1298,13 @@ NOTES:
                 hexColor = `#${r}${g}${b}`;
             }
 
-            // Vérifie si une popup existe déjà et la supprime si c'est le cas
+            //Vérifie si une popup existe déjà et la supprime si c'est le cas
             const existingPopup = document.getElementById('colorPickerPopup');
             if (existingPopup) {
                 existingPopup.remove();
             }
 
-            // Crée la fenêtre popup
+            //Crée la fenêtre popup
             const popup = document.createElement('div');
             popup.id = "colorPickerPopup";
             popup.style.cssText = `
@@ -1314,16 +1329,16 @@ NOTES:
 
             document.body.appendChild(popup);
 
-            // Ajoute des écouteurs d'événement pour les boutons
+            //Ajoute des écouteurs d'événement pour les boutons
             document.getElementById('saveColor').addEventListener('click', function() {
                 const selectedColor = document.getElementById('colorPicker').value;
-                // Convertir la couleur hexadécimale en RGBA pour la transparence
+                //Convertir la couleur hexadécimale en RGBA pour la transparence
                 const r = parseInt(selectedColor.substr(1, 2), 16);
                 const g = parseInt(selectedColor.substr(3, 2), 16);
                 const b = parseInt(selectedColor.substr(5, 2), 16);
                 const rgbaColor = `rgba(${r}, ${g}, ${b}, 0.5)`;
 
-                // Stocker la couleur sélectionnée
+                //Stocker la couleur sélectionnée
                 GM_setValue("highlightColorFav", rgbaColor);
                 highlightColorFav = rgbaColor;
                 popup.remove();
@@ -1351,17 +1366,18 @@ NOTES:
             }
         }
 
-        // Définir des valeurs par défaut
+        //Définir des valeurs par défaut
         const defaultKeys = {
             left: 'q',
             right: 'd',
             up: 'z',
             down: 's',
             hide: 'h',
-            show: 'j'
+            show: 'j',
+            sync: ''
         };
 
-        // Fonction pour récupérer la configuration des touches
+        //Fonction pour récupérer la configuration des touches
         function getKeyConfig() {
             return {
                 left: GM_getValue('keyLeft', defaultKeys.left),
@@ -1369,27 +1385,51 @@ NOTES:
                 up: GM_getValue('keyUp', defaultKeys.up),
                 down: GM_getValue('keyDown', defaultKeys.down),
                 hide: GM_getValue('keyHide', defaultKeys.hide),
-                show: GM_getValue('keyShow', defaultKeys.show)
+                show: GM_getValue('keyShow', defaultKeys.show),
+                sync: GM_getValue('keySync', defaultKeys.sync)
             };
         }
 
-        // Fonction pour simuler un clic sur un bouton, identifié par son id
+        //Fonction pour simuler un clic sur un bouton, identifié par son id
         function simulerClicSurBouton(idBouton) {
-            // Pour les autres boutons, continue à simuler un clic réel
+            //Pour les autres boutons, continue à simuler un clic réel
             const bouton = document.getElementById(idBouton);
             if (bouton) {
                 bouton.click();
             }
         }
 
-        // Écouteur d'événements pour la navigation des pages
-        document.addEventListener('keydown', function(e) {
-            const activeElement = document.activeElement; // Obtient l'élément actuellement en focus
-            const searchBox = document.getElementById('twotabsearchtextbox'); // L'élément du champ de recherche d'Amazon
+        function adjustAlpha(rgbaString, alphaDelta) {
+            //On utilise une RegExp simple pour extraire R, G, B et A
+            const match = rgbaString.match(/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)$/);
+            if (!match) {
+                //Si le format ne correspond pas, on renvoie la couleur telle quelle
+                return rgbaString;
+            }
 
-            // Vérifie si l'élément en focus est le champ de recherche
+            let [ , r, g, b, a ] = match;
+            r = parseInt(r, 10);
+            g = parseInt(g, 10);
+            b = parseInt(b, 10);
+            a = parseFloat(a);
+
+            //On modifie l’alpha en lui ajoutant (ou soustrayant) alphaDelta
+            a = a + alphaDelta;
+
+            //On s’assure de rester dans [0, 1]
+            a = Math.max(0, Math.min(1, a));
+
+            return `rgba(${r}, ${g}, ${b}, ${a})`;
+        }
+
+        //Écouteur d'événements pour la navigation des pages
+        document.addEventListener('keydown', function(e) {
+            const activeElement = document.activeElement; //Obtient l'élément actuellement en focus
+            const searchBox = document.getElementById('twotabsearchtextbox'); //L'élément du champ de recherche d'Amazon
+
+            //Vérifie si l'élément en focus est le champ de recherche
             if (activeElement === searchBox) {
-                return; // Ignore le reste du code si le champ de recherche est en focus
+                return; //Ignore le reste du code si le champ de recherche est en focus
             }
 
             const existingPopupNote = document.getElementById('notePopup');
@@ -1429,6 +1469,9 @@ NOTES:
                     simulerClicSurBouton('boutonToutAfficher');
                 }
             }
+            else if (e.key === keys.sync) {
+                syncProducts(false, true, true);
+            }
         });
 
         function naviguerQueue(direction) {
@@ -1451,26 +1494,26 @@ NOTES:
         }
 
         function naviguerPage(direction) {
-            // Extraire le numéro de page actuel de l'URL
+            //Extraire le numéro de page actuel de l'URL
             const url = new URL(window.location);
             const params = url.searchParams;
             let page = parseInt(params.get('page') || '1', 10);
 
-            // Calculer la nouvelle page
+            //Calculer la nouvelle page
             page += direction;
 
-            // S'assurer que la page est au minimum à 1
+            //S'assurer que la page est au minimum à 1
             if (page < 1) page = 1;
 
-            // Mettre à jour le paramètre de page dans l'URL
+            //Mettre à jour le paramètre de page dans l'URL
             params.set('page', page);
             url.search = params.toString();
 
-            // Naviguer vers la nouvelle page
+            //Naviguer vers la nouvelle page
             window.location.href = url.toString();
         }
 
-        // Fonction pour calculer et formater le temps écoulé
+        //Fonction pour calculer et formater le temps écoulé
         function formaterTempsEcoule(date) {
             const maintenant = new Date();
             const tempsEcoule = maintenant - new Date(date);
@@ -1479,31 +1522,31 @@ NOTES:
             const heures = minutes / 60;
             const jours = heures / 24;
 
-            // Si moins d'une minute s'est écoulée
+            //Si moins d'une minute s'est écoulée
             if (secondes < 60) {
                 return Math.round(secondes) + 's';
             }
-            // Si moins d'une heure s'est écoulée
+            //Si moins d'une heure s'est écoulée
             else if (minutes < 60) {
                 return Math.round(minutes) + 'm';
             }
-            // Si moins d'un jour s'est écoulé
+            //Si moins d'un jour s'est écoulé
             else if (heures < 24) {
-                // Convertir les décimales des heures en minutes arrondies
+                //Convertir les décimales des heures en minutes arrondies
                 const heuresArrondies = Math.floor(heures);
                 const minutesRestantes = Math.round((heures - heuresArrondies) * 60);
                 return heuresArrondies + 'h ' + minutesRestantes + 'm';
             }
-            // Si un ou plusieurs jours se sont écoulés
+            //Si un ou plusieurs jours se sont écoulés
             else {
-                // Convertir les décimales des jours en heures arrondies
+                //Convertir les décimales des jours en heures arrondies
                 const joursArrondis = Math.floor(jours);
                 const heuresRestantes = Math.round((jours - joursArrondis) * 24);
                 return joursArrondis + 'j ' + heuresRestantes + 'h';
             }
         }
 
-        // Fonction pour ajouter l'étiquette de temps à chaque produit
+        //Fonction pour ajouter l'étiquette de temps à chaque produit
         function ajouterEtiquetteTemps() {
             const produits = document.querySelectorAll('.vvp-item-tile');
 
@@ -1515,56 +1558,93 @@ NOTES:
                     const dateAjout = storedProducts[asin].dateAdded;
                     const texteTempsEcoule = formaterTempsEcoule(dateAjout);
 
-                    // Créer l'étiquette de temps
+                    //Créer l'étiquette de temps
                     const etiquetteTemps = document.createElement('div');
                     etiquetteTemps.style.position = 'absolute';
                     etiquetteTemps.style.top = '5px';
-                    etiquetteTemps.style.left = '5px'; // Position à gauche
+                    etiquetteTemps.style.left = '5px'; //Position à gauche
                     etiquetteTemps.style.backgroundColor = 'rgba(255,255,255,0.7)';
                     etiquetteTemps.style.color = 'black';
                     etiquetteTemps.style.padding = '1px 2px';
                     etiquetteTemps.style.borderRadius = '5px';
                     etiquetteTemps.style.fontSize = '12px';
-                    etiquetteTemps.style.whiteSpace = 'nowrap'; // Empêche le texte de passer à la ligne
+                    etiquetteTemps.style.whiteSpace = 'nowrap'; //Empêche le texte de passer à la ligne
                     etiquetteTemps.textContent = texteTempsEcoule;
 
-                    // Ajouter l'étiquette de temps à l'image du produit
+                    //Ajouter l'étiquette de temps à l'image du produit
                     produit.querySelector('.vvp-item-tile-content').style.position = 'relative';
                     produit.querySelector('.vvp-item-tile-content').appendChild(etiquetteTemps);
 
-                    // Ajuster la largeur du bandeau à celle du texte
+                    //Ajuster la largeur du bandeau à celle du texte
                     etiquetteTemps.style.width = 'auto';
                 }
             });
         }
 
+        //Variable pour savoir s'il y a eu un nouvel objet
+        var imgNew = false;
         if (autohideEnabled && apiOk) {
             function tryAutoHide() {
-                // Nettoie les chaînes et vérifie si elles sont vides
+                //Nettoie les chaînes et vérifie si elles sont vides
                 var favWordsTrim = favWords.trim();
                 var hideWordsTrim = hideWords.trim();
 
-                const favArray = favWordsTrim.length > 0 ? favWordsTrim.split(',').map(mot => mot.toLowerCase().trim().replace(/\s+/g, '')).filter(mot => mot.length > 0) : [];
-                const hideArray = hideWordsTrim.length > 0 ? hideWordsTrim.split(',').map(mot => mot.toLowerCase().trim().replace(/\s+/g, '')).filter(mot => mot.length > 0) : [];
+                //var favArray = favWordsTrim.length > 0 ? favWordsTrim.split(',').map(mot => mot.toLowerCase().trim().replace(/\s+/g, '')).filter(mot => mot.length > 0) : [];
+                //var hideArray = hideWordsTrim.length > 0 ? hideWordsTrim.split(',').map(mot => mot.toLowerCase().trim().replace(/\s+/g, '')).filter(mot => mot.length > 0) : [];
                 const itemTiles = document.querySelectorAll('.vvp-item-tile');
+
+                //Convertir en Regex
+                var favArray = favWordsTrim.length > 0
+                ? favWordsTrim.split(',').map(pattern => {
+                    pattern = pattern.trim();
+                    if (pattern.length > 0) {
+                        try {
+                            return new RegExp(pattern, 'i');
+                        } catch (e) {
+                            console.error('Expression regex invalide :', pattern, e);
+                            return null;
+                        }
+                    } else {
+                        return null;
+                    }
+                }).filter(regex => regex != null)
+                : [];
+
+                var hideArray = hideWordsTrim.length > 0
+                ? hideWordsTrim.split(',').map(pattern => {
+                    pattern = pattern.trim();
+                    if (pattern.length > 0) {
+                        try {
+                            return new RegExp(pattern, 'i');
+                        } catch (e) {
+                            console.error('Expression regex invalide :', pattern, e);
+                            return null;
+                        }
+                    } else {
+                        return null;
+                    }
+                }).filter(regex => regex != null)
+                : [];
 
                 if (itemTiles.length > 0) {
                     itemTiles.forEach(function(tile) {
                         const fullTextElement = tile.querySelector('.a-truncate-full.a-offscreen');
                         const parentDiv = tile.closest('.vvp-item-tile');
                         if (fullTextElement) {
-                            const textContentLower = fullTextElement.textContent.toLowerCase().trim().replace(/\s+/g, '');
-
-                            // Effectue la vérification seulement si favArray n'est pas vide
-                            if (favArray.length > 0 && favArray.some(mot => textContentLower.includes(mot))) {
-                                parentDiv.style.backgroundColor = highlightColorFav; // Assurez-vous que 'highlightColorFav' est bien défini
+                            //const textContentLower = fullTextElement.textContent.toLowerCase().trim().replace(/\s+/g, '');
+                            const textContent = fullTextElement.textContent.trim().replace(/\s+/g, ' ');
+                            //Effectue la vérification seulement si favArray n'est pas vide
+                            if (favArray.length > 0 && favArray.some(regex => regex.test(textContent))) {
+                                parentDiv.style.backgroundColor = highlightColorFav;
                                 parentDiv.parentNode.prepend(parentDiv);
                             }
-                            // Effectue la vérification seulement si hideArray n'est pas vide
-                            else if (hideArray.length > 0 && hideArray.some(mot => textContentLower.includes(mot))) {
+                            //Effectue la vérification seulement si hideArray n'est pas vide
+                            else if (hideArray.length > 0 && hideArray.some(regex => regex.test(textContent))) {
                                 const asin = parentDiv.getAttribute('data-asin') || parentDiv.querySelector('.vvp-details-btn input').getAttribute('data-asin');
-                                const etatCacheKey = asin + '_cache';
-                                localStorage.setItem(etatCacheKey, JSON.stringify({ estCache: false }));
+                                const enrollment = getEnrollment(parentDiv);
+                                const hideKey = getAsinEnrollment(asin, enrollment);
+                                const etatCacheKey = hideKey + '_c';
+                                localStorage.setItem(etatCacheKey, '1');
                                 parentDiv.style.display = 'none';
                             }
                         }
@@ -1586,13 +1666,12 @@ NOTES:
             let keys = GM_listValues();
 
             keys.forEach(key => {
-                //Vérifier si la clé se termine par "_favori"
-                if (key.endsWith('_favori')) {
+                //Vérifier si la clé se termine par "_f"
+                if (key.endsWith('_f')) {
                     //Récupérer la valeur correspondante
                     let value = GM_getValue(key);
-
                     //Stocker la valeur dans le localStorage
-                    localStorage.setItem(key, JSON.stringify(value));
+                    localStorage.setItem(key, value);
                     //Supprimer la valeur de GM
                     GM_deleteValue(key);
                 }
@@ -1602,7 +1681,8 @@ NOTES:
         function ajouterIconeEtFonctionCacher() {
             convertGMFav();
             const produits = document.querySelectorAll('.vvp-item-tile');
-            const resultats = document.querySelector('#vvp-items-grid-container > p'); // Modifiez ce sélecteur si nécessaire
+            const resultats = document.querySelector('#vvp-items-grid-container > p');
+            const vineGrid = document.querySelector('#vvp-items-grid');
 
             // Ajout du style pour les boutons
             const style = document.createElement('style');
@@ -1667,95 +1747,212 @@ NOTES:
             const urlIcone = 'https://pickme.alwaysdata.net/img/314858-hidden-eye-icon.png';
             const urlIconeOeil = 'https://pickme.alwaysdata.net/img/314859-eye-icon.png';
             // Création des boutons avec le nouveau style
-            const boutonVisibles = document.createElement('button');
-            boutonVisibles.textContent = produitsVisibles;
-            boutonVisibles.classList.add('bouton-filtre', 'active'); // Ajout des classes pour le style
+            function creerBoutons() {
+                const boutonVisibles = document.createElement('button');
+                boutonVisibles.textContent = produitsVisibles;
+                boutonVisibles.classList.add('bouton-filtre', 'active');
 
-            const boutonCaches = document.createElement('button');
-            boutonCaches.textContent = produitsCaches;
-            boutonCaches.classList.add('bouton-filtre'); // Ajout des classes pour le style
+                const boutonCaches = document.createElement('button');
+                boutonCaches.textContent = produitsCaches;
+                boutonCaches.classList.add('bouton-filtre');
 
-            // Ajout des boutons pour cacher tout et tout afficher
-            const boutonCacherTout = document.createElement('button');
-            boutonCacherTout.textContent = toutCacher;
-            boutonCacherTout.classList.add('bouton-action');
-            boutonCacherTout.id = 'boutonCacherTout';
+                const boutonCacherTout = document.createElement('button');
+                boutonCacherTout.textContent = toutCacher;
+                boutonCacherTout.classList.add('bouton-action');
+                boutonCacherTout.id = 'boutonCacherTout';
 
-            const boutonToutAfficher = document.createElement('button');
-            boutonToutAfficher.textContent = toutAfficher;
-            boutonToutAfficher.classList.add('bouton-action');
-            boutonToutAfficher.id = 'boutonToutAfficher';
+                const boutonToutAfficher = document.createElement('button');
+                boutonToutAfficher.textContent = toutAfficher;
+                boutonToutAfficher.classList.add('bouton-action');
+                boutonToutAfficher.id = 'boutonToutAfficher';
 
-            const divBoutons = document.createElement('div');
-            divBoutons.style.marginTop = '5px'; // Réduit l'espace au-dessus des boutons
-            divBoutons.style.marginBottom = '15px'; // Augmente l'espace en dessous des boutons
-            divBoutons.appendChild(boutonVisibles);
-            divBoutons.appendChild(boutonCaches);
-            divBoutons.appendChild(boutonCacherTout);
-            divBoutons.appendChild(boutonToutAfficher);
-
-            // Insertion des boutons après les résultats
-            if (resultats) {
-                resultats.after(divBoutons);
+                return { boutonVisibles, boutonCaches, boutonCacherTout, boutonToutAfficher };
             }
 
-            boutonVisibles.addEventListener('click', () => afficherProduits(true));
-            boutonCaches.addEventListener('click', () => afficherProduits(false));
+            //Fonction pour synchroniser les boutons haut et bas
+            function synchroniserBoutons(boutonsHaut, boutonsBas, hideBas) {
+                // Synchronisation du bouton "Produits visibles"
+                boutonsHaut.boutonVisibles.addEventListener('click', () => {
+                    afficherProduits(true);
+                    boutonsHaut.boutonVisibles.classList.add('active');
+                    boutonsHaut.boutonCaches.classList.remove('active');
+
+                    if (hideBas) {
+                        boutonsBas.boutonVisibles.classList.add('active');
+                        boutonsBas.boutonCaches.classList.remove('active');
+                    }
+                });
+
+                if (hideBas) {
+                    boutonsBas.boutonVisibles.addEventListener('click', () => {
+                        afficherProduits(true);
+                        boutonsHaut.boutonVisibles.classList.add('active');
+                        boutonsHaut.boutonCaches.classList.remove('active');
+                    });
+                }
+
+                // Synchronisation du bouton "Produits cachés"
+                boutonsHaut.boutonCaches.addEventListener('click', () => {
+                    afficherProduits(false);
+                    boutonsHaut.boutonVisibles.classList.remove('active');
+                    boutonsHaut.boutonCaches.classList.add('active');
+
+                    if (hideBas) {
+                        boutonsBas.boutonVisibles.classList.remove('active');
+                        boutonsBas.boutonCaches.classList.add('active');
+                    }
+                });
+
+                if (hideBas) {
+                    boutonsBas.boutonCaches.addEventListener('click', () => {
+                        afficherProduits(false);
+                        boutonsHaut.boutonVisibles.classList.remove('active');
+                        boutonsHaut.boutonCaches.classList.add('active');
+                    });
+                }
+
+                // Synchronisation des boutons "Tout cacher" et "Tout afficher"
+                boutonsHaut.boutonCacherTout.addEventListener('click', () => {
+                    toggleTousLesProduits(true);
+                    boutonsHaut.boutonCacherTout.style.display = '';
+                    boutonsHaut.boutonToutAfficher.style.display = 'none';
+
+                    if (hideBas) {
+                        boutonsBas.boutonCacherTout.style.display = '';
+                        boutonsBas.boutonToutAfficher.style.display = 'none';
+                    }
+                });
+
+                if (hideBas) {
+                    boutonsBas.boutonCacherTout.addEventListener('click', () => {
+                        toggleTousLesProduits(true);
+                        boutonsHaut.boutonCacherTout.style.display = '';
+                        boutonsHaut.boutonToutAfficher.style.display = 'none';
+                    });
+                }
+
+                boutonsHaut.boutonToutAfficher.addEventListener('click', () => {
+                    toggleTousLesProduits(false);
+                    boutonsHaut.boutonCacherTout.style.display = 'none';
+                    boutonsHaut.boutonToutAfficher.style.display = '';
+
+                    if (hideBas) {
+                        boutonsBas.boutonCacherTout.style.display = 'none';
+                        boutonsBas.boutonToutAfficher.style.display = '';
+                    }
+                });
+
+                if (hideBas) {
+                    boutonsBas.boutonToutAfficher.addEventListener('click', () => {
+                        toggleTousLesProduits(false);
+                        boutonsHaut.boutonCacherTout.style.display = 'none';
+                        boutonsHaut.boutonToutAfficher.style.display = '';
+                    });
+                }
+            }
+
+            // Création et insertion des boutons en haut et en bas
+            const boutonsHaut = creerBoutons();
+            const divBoutonsHaut = document.createElement('div');
+            divBoutonsHaut.style.marginTop = '5px'; // Réduit l'espace au-dessus des boutons
+            divBoutonsHaut.style.marginBottom = '15px'; // Augmente l'espace en dessous des boutons
+            divBoutonsHaut.appendChild(boutonsHaut.boutonVisibles);
+            divBoutonsHaut.appendChild(boutonsHaut.boutonCaches);
+            divBoutonsHaut.appendChild(boutonsHaut.boutonCacherTout);
+            divBoutonsHaut.appendChild(boutonsHaut.boutonToutAfficher);
+
+            if (resultats) {
+                resultats.after(divBoutonsHaut);
+            }
+
+            const boutonsBas = creerBoutons();
+            const divBoutonsBas = document.createElement('div');
+            divBoutonsBas.style.marginTop = '5px'; // Réduit l'espace au-dessus des boutons
+            divBoutonsBas.style.marginBottom = '15px'; // Augmente l'espace en dessous des boutons
+            divBoutonsBas.appendChild(boutonsBas.boutonVisibles);
+            divBoutonsBas.appendChild(boutonsBas.boutonCaches);
+            divBoutonsBas.appendChild(boutonsBas.boutonCacherTout);
+            divBoutonsBas.appendChild(boutonsBas.boutonToutAfficher);
+
+            if (vineGrid && hideBas) {
+                vineGrid.after(divBoutonsBas);
+            }
+
+            // Synchronisation des boutons haut et bas
+            synchroniserBoutons(boutonsHaut, boutonsBas, hideBas);
 
             // Fonction pour cacher ou afficher tous les produits
             function toggleTousLesProduits(cacher) {
                 produits.forEach(produit => {
                     const asin = produit.getAttribute('data-asin') || produit.querySelector('.vvp-details-btn input').getAttribute('data-asin');
-                    const etatCacheKey = asin + '_cache';
-                    const etatFavoriKey = asin + '_favori';
+                    const enrollment = getEnrollment(produit);
+                    const hideKey = getAsinEnrollment(asin, enrollment);
+                    const etatCacheKey = hideKey + '_c';
+                    const etatFavoriKey = asin + '_f';
 
                     // Vérifie si le produit est en favori avant de changer son état de caché
-                    const etatFavori = JSON.parse(localStorage.getItem(etatFavoriKey)) || { estFavori: false };
-                    if (!etatFavori.estFavori) { // Ne modifie l'état de caché que si le produit n'est pas en favori
-                        localStorage.setItem(etatCacheKey, JSON.stringify({ estCache: cacher }));
+                    const etatFavori = localStorage.getItem(etatFavoriKey) || '0';
+                    if (etatFavori == '0') { // Ne modifie l'état de caché que si le produit n'est pas en favori
+                        localStorage.setItem(etatCacheKey, cacher ? '1' : '0');
 
                         // Sélection de l'icône d'œil dans le produit actuel et mise à jour si l'état de caché change
                         const iconeOeil = produit.querySelector('img[src="' + urlIcone + '"], img[src="' + urlIconeOeil + '"]');
                         if (iconeOeil) {
-                            iconeOeil.setAttribute('src', cacher ? urlIcone : urlIconeOeil);
+                            iconeOeil.setAttribute('src', cacher ? urlIconeOeil : urlIcone);
                         }
                     }
                 });
 
                 // Force la mise à jour de l'affichage selon le nouveau statut de visibilité
-                afficherProduits(!cacher);
+                afficherProduits(cacher);
             }
-            // Gestion des clics sur les boutons Cacher tout et Tout afficher
-            boutonCacherTout.addEventListener('click', () => toggleTousLesProduits(false));
-            boutonToutAfficher.addEventListener('click', () => toggleTousLesProduits(true));
 
-            // Affiche les produits en fonction du filtre : visible ou caché
+            //Affiche les produits en fonction du filtre : visible ou caché
             function afficherProduits(afficherVisibles) {
                 const produitsFavoris = [];
                 produits.forEach(produit => {
                     const asin = produit.getAttribute('data-asin') || produit.querySelector('.vvp-details-btn input').getAttribute('data-asin');
-                    const etatCacheKey = asin + '_cache';
-                    const etatFavoriKey = asin + '_favori';
+                    const enrollment = getEnrollment(produit);
+                    const hideKey = getAsinEnrollment(asin, enrollment);
+                    const etatCacheKey = hideKey + '_c';
+                    const etatFavoriKey = asin + '_f';
 
-                    // Initialisation des états si non définis
-                    let etatCache = JSON.parse(localStorage.getItem(etatCacheKey)) || { estCache: true };
-                    let etatFavori = JSON.parse(localStorage.getItem(etatFavoriKey)) || { estFavori: false };
+                    //Convertir de la key ASIN à la key ASIN + enrollment, à partir de la 1.14
+                    const etatCacheOldKey = asin + '_c';
+                    const oldValue = localStorage.getItem(etatCacheOldKey);
+                    if (oldValue !== null) {
+                        localStorage.setItem(etatCacheKey, oldValue);
+                        localStorage.removeItem(etatCacheOldKey);
+                    }
+                    //Fin de conversion
 
-                    // Enregistre les valeurs par défaut si nécessaire
+                    //Initialisation des états si non définis
+                    let etatCache = localStorage.getItem(etatCacheKey) || '0';
+                    let etatFavori = localStorage.getItem(etatFavoriKey) || '0';
+
+                    //Enregistre les valeurs par défaut si nécessaire
                     if (localStorage.getItem(etatCacheKey) === null) {
-                        localStorage.setItem(etatCacheKey, JSON.stringify(etatCache));
+                        if (highlightEnabled) {
+                            var hlColorRepop = highlightColor;
+                            if (storedProducts.hasOwnProperty(asin)) {
+                                hlColorRepop = highlightColorRepop;
+                            }
+                            produit.style.backgroundColor = hlColorRepop;
+                            imgNew = true;
+                        }
+                        localStorage.setItem(etatCacheKey, etatCache);
                     }
                     if (localStorage.getItem(etatFavoriKey) === null) {
-                        localStorage.setItem(etatFavoriKey, JSON.stringify(etatFavori));
+                        localStorage.setItem(etatFavoriKey, etatFavori);
                     }
                     //On test s'il est favori et si on peut le cacher ou non
-                    if (etatFavori.estFavori) {
-                        // Les produits favoris sont toujours affichés dans l'onglet "Produits visibles"
-                        // et cachés dans l'onglet "Produits cachés"
+                    if (etatFavori == '1') {
+                        //Les produits favoris sont toujours affichés dans l'onglet "Produits visibles"
+                        //et cachés dans l'onglet "Produits cachés"
                         produit.style.display = afficherVisibles ? '' : 'none';
                         produitsFavoris.push(produit);
                     } else {
-                        if ((etatCache.estCache && afficherVisibles) || (!etatCache.estCache && !afficherVisibles)) {
+                        if ((etatCache == '0' && afficherVisibles) || (etatCache == '1' && !afficherVisibles)) {
                             produit.style.display = '';
                         } else {
                             produit.style.display = 'none';
@@ -1768,21 +1965,27 @@ NOTES:
                         containerDiv.prepend(element);
                     });
                 }
-                boutonVisibles.classList.toggle('active', afficherVisibles); // Active ou désactive le bouton des produits visibles
-                boutonCaches.classList.toggle('active', !afficherVisibles); // Active ou désactive le bouton des produits cachés
+                boutonsHaut.boutonVisibles.classList.toggle('active', afficherVisibles); // Active ou désactive le bouton des produits visibles
+                boutonsBas.boutonVisibles.classList.toggle('active', afficherVisibles);
+                boutonsHaut.boutonCaches.classList.toggle('active', !afficherVisibles); // Active ou désactive le bouton des produits cachés
+                boutonsBas.boutonCaches.classList.toggle('active', !afficherVisibles);
                 // Gestion de l'affichage des boutons "Cacher tout" et "Tout afficher"
-                boutonCacherTout.style.display = afficherVisibles ? '' : 'none';
-                boutonToutAfficher.style.display = !afficherVisibles ? '' : 'none';
+                boutonsHaut.boutonCacherTout.style.display = afficherVisibles ? '' : 'none';
+                boutonsBas.boutonCacherTout.style.display = afficherVisibles ? '' : 'none';
+                boutonsHaut.boutonToutAfficher.style.display = !afficherVisibles ? '' : 'none';
+                boutonsBas.boutonToutAfficher.style.display = !afficherVisibles ? '' : 'none';
             }
 
             produits.forEach(produit => {
                 const asin = produit.getAttribute('data-asin') || produit.querySelector('.vvp-details-btn input').getAttribute('data-asin');
-                const etatCacheKey = asin + '_cache';
-                const etatFavoriKey = asin + '_favori';
+                const enrollment = getEnrollment(produit);
+                const hideKey = getAsinEnrollment(asin, enrollment);
+                const etatCacheKey = hideKey + '_c';
+                const etatFavoriKey = asin + '_f';
                 const iconeOeil = document.createElement('img');
 
-                const etatCache = JSON.parse(localStorage.getItem(etatCacheKey)) || { estCache: true };
-                iconeOeil.setAttribute('src', etatCache.estCache ? urlIcone : urlIconeOeil);
+                const etatCache = localStorage.getItem(etatCacheKey) || '0';
+                iconeOeil.setAttribute('src', etatCache === '1' ? urlIconeOeil : urlIcone);
                 if (cssEnabled || mobileEnabled) {
                     iconeOeil.style.cssText = 'position: absolute; top: 0px; right: 1px; cursor: pointer; width: 35px; height: 35px; z-index: 10;';
                 } else {
@@ -1790,36 +1993,36 @@ NOTES:
                 }
 
                 iconeOeil.addEventListener('click', () => {
-                    const etatFavoriKey = asin + '_favori';
-                    const etatFavori = JSON.parse(localStorage.getItem(etatFavoriKey)) || { estFavori: false };
+                    const etatFavoriKey = asin + '_f';
+                    const etatFavori = localStorage.getItem(etatFavoriKey) || '0';
 
                     // Vérifie si le produit n'est pas marqué comme favori avant de changer son état de caché
-                    if (!etatFavori.estFavori) {
-                        const etatCacheActuel = JSON.parse(localStorage.getItem(etatCacheKey)) || { estCache: false };
-                        etatCacheActuel.estCache = !etatCacheActuel.estCache;
-                        localStorage.setItem(etatCacheKey, JSON.stringify(etatCacheActuel));
+                    if (etatFavori === '0') {
+                        const etatCacheActuel = localStorage.getItem(etatCacheKey);
+                        const nouvelEtatCache = etatCacheActuel === '1' ? '0' : '1';
+                        localStorage.setItem(etatCacheKey, nouvelEtatCache);
 
                         // Met à jour l'icône basée sur le nouvel état après le clic
-                        iconeOeil.setAttribute('src', etatCacheActuel.estCache ? urlIcone : urlIconeOeil);
+                        iconeOeil.setAttribute('src', etatCacheActuel === '1' ? urlIcone : urlIconeOeil);
                     }
 
                     // Force la mise à jour de l'affichage selon l'état actuel des filtres
-                    afficherProduits(!boutonCaches.classList.contains('active'));
+                    afficherProduits(!boutonsHaut.boutonCaches.classList.contains('active'));
                 });
 
                 const urlIconeFavoriGris = 'https://pickme.alwaysdata.net/img/coeurgris2.png';
                 const urlIconeFavoriRouge = 'https://pickme.alwaysdata.net/img/coeurrouge2.png';
                 const iconeFavori = document.createElement('img');
 
-                const etatFavori = JSON.parse(localStorage.getItem(etatFavoriKey));
-                iconeFavori.setAttribute('src', etatFavori && etatFavori.estFavori ? urlIconeFavoriRouge : urlIconeFavoriGris);
+                const etatFavori = localStorage.getItem(etatFavoriKey);
+                iconeFavori.setAttribute('src', (etatFavori && etatFavori == '1') ? urlIconeFavoriRouge : urlIconeFavoriGris);
                 //On test si on utilise le css alternatif pour bouger l'emplacement du coeur, sinon il est superposé au temps du produit
                 if (cssEnabled || mobileEnabled) {
                     //On test si le produit est nouveau
                     if (!storedProducts.hasOwnProperty(asin) || !highlightEnabled) {
                         iconeFavori.style.cssText = 'position: absolute; top: 8px; left: 4px; cursor: pointer; width: 23px; height: 23px; z-index: 10;';
                     } else {
-                        iconeFavori.style.cssText = 'position: absolute; top: 30px; left: 4px; cursor: pointer; width: 23px; height: 23px; z-index: 10;';
+                        iconeFavori.style.cssText = 'position: absolute; top: 25px; left: 4px; cursor: pointer; width: 23px; height: 23px; z-index: 10;';
                     }
                 } else {
                     iconeFavori.style.cssText = 'position: absolute; top: 8px; left: 8px; cursor: pointer; width: 23px; height: 23px; z-index: 10;';
@@ -1827,14 +2030,14 @@ NOTES:
 
                 // Gestion du clic sur l'icône de favori
                 iconeFavori.addEventListener('click', () => {
-                    const etatFavoriActuel = JSON.parse(localStorage.getItem(etatFavoriKey)) || { estFavori: false };
-                    etatFavoriActuel.estFavori = !etatFavoriActuel.estFavori;
-                    localStorage.setItem(etatFavoriKey, JSON.stringify(etatFavoriActuel));
-                    iconeFavori.setAttribute('src', etatFavoriActuel.estFavori ? urlIconeFavoriRouge : urlIconeFavoriGris);
+                    var etatFavoriActuel = localStorage.getItem(etatFavoriKey) || '0';
+                    etatFavoriActuel = etatFavoriActuel === '1' ? '0' : '1';
+                    localStorage.setItem(etatFavoriKey, etatFavoriActuel);
+                    iconeFavori.setAttribute('src', etatFavoriActuel === '1' ? urlIconeFavoriRouge : urlIconeFavoriGris);
 
-                    if (etatFavoriActuel.estFavori) {
+                    if (etatFavoriActuel === '1') {
                         // Si le produit est marqué comme favori, s'assurer qu'il est marqué comme non caché
-                        localStorage.setItem(etatCacheKey, JSON.stringify({ estCache: true }));
+                        localStorage.setItem(etatCacheKey, '0');
                         produit.style.display = ''; // Assure que le produit est visible
                         // Mettre à jour l'icône de l'œil pour refléter que le produit n'est plus caché
                         const iconeOeil = produit.querySelector('img[src="' + urlIcone + '"], img[src="' + urlIconeOeil + '"]');
@@ -1843,7 +2046,7 @@ NOTES:
                         }
                     }
 
-                    afficherProduits(!boutonCaches.classList.contains('active'));
+                    afficherProduits(!boutonsHaut.boutonCaches.classList.contains('active'));
                 });
 
                 produit.style.position = 'relative';
@@ -1901,7 +2104,7 @@ body {
             var styleAddress = document.createElement('style');
 
             styleAddress.textContent = `
-#a-popover-6 {
+#a-popover-4 {
     height: 480px !important;
     width: 900px !important;
 }
@@ -2035,6 +2238,8 @@ body {
         if (mobileEnabled && apiOk)
         {
             var mobileCss = document.createElement('style');
+            // On calcule si on doit appliquer la hauteur ou non
+            var applyHeight = !(extendedEnabled && mobileEnabled);
 
             mobileCss.textContent = `
 #configPopup {
@@ -2520,7 +2725,7 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
   .vvp-item-tile
   .vvp-item-tile-content
   > .vvp-item-product-title-container {
-  height: var(--max-product-title) !important;
+  ${applyHeight ? 'height: var(--max-product-title) !important;' : ''}
   font-size: var(--product-title-text-size) !important;
 }
 
@@ -2536,17 +2741,6 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
         }
 
         //Gestion des thèmes couleurs
-        // Fonction pour charger le fichier CSS
-        function loadCSS(url) {
-            var link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.type = 'text/css';
-            link.href = url;
-            document.getElementsByTagName('head')[0].appendChild(link);
-        }
-
-        //URL des CSS
-        var baseURLCSS = 'https://pickme.alwaysdata.net/';
         //Thème
         if (savedTheme != "default") {
             if (mobileEnabled) {
@@ -2582,8 +2776,31 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
         addGlobalStyle(`.a-button-discord.mobile-vertical { margin-top: 7px; margin-left: 0px; }`);
 
         //PickMe add
+        //Récupérer l'enrollment
+        function getEnrollment(element) {
+            const recommendationId = element.getAttribute('data-recommendation-id');
+            let enrollment = null;
+
+            if (recommendationId) {
+                //Découper la chaîne pour isoler la dernière partie après le dernier '#'
+                const parts = recommendationId.split('#');
+                enrollment = parts[parts.length - 1];
+                //Supprimer "vine.enrollment." si présent
+                if (enrollment.startsWith('vine.enrollment.')) {
+                    enrollment = enrollment.replace('vine.enrollment.', '');
+                }
+            }
+            return enrollment;
+        }
+
+        //Générer la combinaison ASIN et enrollment
+        function getAsinEnrollment(asin, enrollment) {
+            const enrollmentPart = enrollment.split('-')[1];
+            return asin + enrollmentPart;
+        }
+
         const urlParams = new URLSearchParams(window.location.search);
-        const productsCont = document.querySelectorAll('.vvp-item-product-title-container > a.a-link-normal');
+
         let valeurQueue = urlParams.get('queue');
         const valeurPn = parseInt(urlParams.get('pn'), 10) || 0; // Utilisez 0 comme valeur par défaut si pn n'est pas défini
         const valeurCn = parseInt(urlParams.get('cn'), 10) || 0; // Utilisez 0 comme valeur par défaut si cn n'est pas défini
@@ -2598,42 +2815,67 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
         if (valeurCn > 0) {
             valeurPage = valeurCn.toString();
         }
-        const listElements = [];
 
-        //Variable pour savoir s'il y a eu un nouvel objet
-        let imgNew = false;
+        const items = document.querySelectorAll('.vvp-item-tile');
+        const listElements = [];
+        const listElementsOrder = [];
+
         let elementsToPrepend = [];
-        productsCont.forEach(element => {
-            const urlComp = element.href;
-            listElements.push(urlComp);
+        items.forEach(element => {
+            //Récupérer le texte à partir du lien dans .vvp-item-product-title-container
+            const linkElement = element.querySelector('.vvp-item-product-title-container > a.a-link-normal');
+            const title = linkElement ? linkElement.innerText.trim() : null;
+
+            //Récupérer l'URL de l'image
+            const imgElement = element.querySelector('img');
+            const imgUrl = imgElement ? imgElement.src : null;
+
+            //Récupérer l'enrollment
+            let enrollment = getEnrollment(element);
+
+            //Récupérer l'URL du produit
+            const productUrl = linkElement ? linkElement.href : null;
+
+            // Ajouter les données récupérées dans le tableau
+            listElements.push({
+                title: title,
+                imgUrl: imgUrl,
+                productUrl: productUrl,
+                enrollment: enrollment
+            });
+            listElementsOrder.push(productUrl);
             if ((firsthlEnabled || highlightEnabled) && apiOk) {
-                const asin = element.href.split('/dp/')[1].split('/')[0]; // Extrait l'ASIN du produit
-                const parentDiv = element.closest('.vvp-item-tile'); // Trouver le div parent à mettre en surbrillance
+                const asin = linkElement.href.split('/dp/')[1].split('/')[0]; // Extrait l'ASIN du produit
                 //const containerDiv = document.getElementById('vvp-items-grid'); // L'élément conteneur de tous les produits
-                // Vérifier si le produit existe déjà dans les données locales
+                //Vérifier si le produit existe déjà dans les données locales
                 if (!storedProducts.hasOwnProperty(asin)) {
-                    // Si le produit n'existe pas, l'ajouter aux données locales avec la date courante
+                    //Si le produit n'existe pas, l'ajouter aux données locales avec la date courante
                     const currentDate = new Date().toISOString(); // Obtenir la date courante en format ISO
+                    const enrollmentKey = getAsinEnrollment(asin, enrollment);
+
                     storedProducts[asin] = {
                         added: true, // Marquer le produit comme ajouté
+                        enrollmentKey: enrollmentKey,
                         dateAdded: currentDate // Stocker la date d'ajout
                     };
 
                     GM_setValue("storedProducts", JSON.stringify(storedProducts)); // Sauvegarder les changements
 
-                    // Appliquer la mise en surbrillance au div parent
-                    if (parentDiv && highlightEnabled) {
-                        parentDiv.style.backgroundColor = highlightColor;
+                    //Appliquer la mise en surbrillance au div parent
+                    if (highlightEnabled) {
+                        element.style.backgroundColor = highlightColor;
                         imgNew = true;
                     }
-                    // On stocke les produits qu'on va devoir remonter
-                    if (parentDiv && firsthlEnabled) {
-                        //containerDiv.prepend(parentDiv);
-                        elementsToPrepend.push(parentDiv);
+                    //On stocke les produits qu'on va devoir remonter
+                    if (firsthlEnabled) {
+                        //containerDiv.prepend(element);
+                        elementsToPrepend.push(element);
                         imgNew = true;
                     }
                 }
             }
+            //Modifier le texte du bouton détails
+            changeButtonProduct(element);
         });
 
         //On remonte les produits dans leur ordre initial
@@ -2646,16 +2888,21 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             }
         }
 
+        //Bouton de commandes rapides
+        if (fastCmd && apiOk) {
+            addFastCmd();
+        }
+
         if (imgNew && callUrlEnabled && apiOk && callUrl && valeurQueue == "potluck") {
             appelURL();
         }
 
-        // Durée maximale de l'ancienneté en millisecondes (ici: 1 jour)
-        const MAX_CACHE_AGE = 24 * 60 * 60 * 1000;
+        //Durée maximale de l'ancienneté en millisecondes (ici: 1 jour)
+        const MAX_c_AGE = 24 * 60 * 60 * 1000;
 
-        // Fonction pour vérifier si une page est potentiellement chargée depuis un cache ancien
+        //Fonction pour vérifier si une page est potentiellement chargée depuis un cache ancien
         function isPageCachedOld() {
-            // Récupère la date de dernière visite stockée
+            //Récupère la date de dernière visite stockée
             const lastVisit = GM_getValue('lastVisit', null);
             const now = new Date().getTime();
 
@@ -2663,22 +2910,22 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                 const lastVisitDate = new Date(lastVisit);
                 const age = now - lastVisitDate.getTime();
 
-                // Si l'âge est supérieur à MAX_CACHE_AGE, on considère la page comme obsolète
-                if (age > MAX_CACHE_AGE) {
+                //Si l'âge est supérieur à MAX_c_AGE, on considère la page comme obsolète
+                if (age > MAX_c_AGE) {
                     GM_setValue('lastVisit', now);
                     return true;
                 }
             }
 
-            // Met à jour la date de dernière visite
+            //Met à jour la date de dernière visite
             GM_setValue('lastVisit', now);
             return false;
         }
 
         if (listElements.length > 0 && !isPageCachedOld()) {
             sendDatasToAPI(listElements);
-            if (ordersInfos && window.location.href.startsWith("https://www.amazon.fr/vine/vine-items?queue=")) {
-                ordersPost(listElements);
+            if (ordersInfos && ordersEnabled && window.location.href.startsWith("https://www.amazon.fr/vine/vine-items?queue=")) {
+                ordersPost(listElementsOrder);
             }
         }
 
@@ -2850,8 +3097,8 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             const boutonReset = document.createElement('button');
             boutonReset.textContent = 'Reset';
             boutonReset.classList.add('bouton-reset');
-            //boutonReset.addEventListener('click', resetEtMiseAJour);
-            boutonReset.addEventListener('click', () => syncProducts(false));
+            boutonReset.addEventListener('click', resetEtMiseAJour);
+            //boutonReset.addEventListener('click', () => syncProducts(false));
 
             // Sélection du conteneur où insérer le bouton "Reset"
             const conteneur = document.querySelector('#vvp-browse-nodes-container > p');
@@ -2892,30 +3139,35 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
         const btn_error = `<span class='a-button-discord-icon a-button-discord-error a-hires' style='background-position: -451px -422px;'></span>`;
         const btn_info = `<span class='a-button-discord-icon a-button-discord-info a-hires' style='background-position: -257px -354px;'></span>`;
 
-        // The modals related to error messages
+        //The modals related to error messages
         const errorMessages = document.querySelectorAll('#vvp-product-details-error-alert, #vvp-out-of-inventory-error-alert');
 
         //PickMe add
         function purgeStoredProducts(purgeAll = false) {
-            // Charger les produits stockés ou initialiser comme un objet vide si aucun produit n'est trouvé
+            //Charger les produits stockés ou initialiser comme un objet vide si aucun produit n'est trouvé
             var storedProducts = JSON.parse(GM_getValue("storedProducts", '{}'));
             const currentDate = new Date().getTime(); // Obtenir la date et l'heure courantes en millisecondes
 
-            // Parcourir les clés (ASIN) dans storedProducts
+            //Parcourir les clés (ASIN) dans storedProducts
             for (const asin in storedProducts) {
-                if (storedProducts.hasOwnProperty(asin)) { // Vérification pour éviter les propriétés héritées
-                    const cacheKey = asin + '_cache';
-                    const favoriKey = asin + '_favori';
+                if (storedProducts.hasOwnProperty(asin)) { //Vérification pour éviter les propriétés héritées
+                    const cacheKey = asin + '_c';
+                    const favoriKey = asin + '_f';
                     if (purgeAll) {
                         // Purger le produit sans vérifier la date
                         delete storedProducts[asin];
                     } else {
                         // Purger le produit en fonction de la date d'expiration
                         const productDateAdded = new Date(storedProducts[asin].dateAdded).getTime(); // Convertir la date d'ajout en millisecondes
-                        if (currentDate - productDateAdded >= ITEM_EXPIRY) { // Vérifier si le produit a expiré
-                            delete storedProducts[asin]; // Supprimer le produit expiré
+                        if (currentDate - productDateAdded >= ITEM_EXPIRY) { //Vérifier si le produit a expiré
+                            if (storedProducts[asin] && storedProducts[asin].enrollmentKey) {
+                                const hideKey = storedProducts[asin].enrollmentKey + '_c';
+                                localStorage.removeItem(hideKey);
+                            }
+                            //On supprime l'ancienne clé pour cacher pour l'instant (utilisé avant la 1.14)
                             localStorage.removeItem(cacheKey);
                             localStorage.removeItem(favoriKey);
+                            delete storedProducts[asin]; // Supprimer le produit expiré
                         }
                     }
                 }
@@ -2937,8 +3189,8 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
 
             for (let i = localStorage.length - 1; i >= 0; i--) {
                 const key = localStorage.key(i);
-                const isCacheKey = key.includes('_cache');
-                const isFavoriKey = key.includes('_favori');
+                const isCacheKey = key.includes('_c');
+                const isFavoriKey = key.includes('_f');
                 if (isCacheKey || isFavoriKey) {
                     if (isCacheKey && purgeHidden) {
                         localStorage.removeItem(key);
@@ -2947,46 +3199,165 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                     }
                 }
             }
+            const button = document.getElementById('purgeAllItems');
+            button.innerHTML = `Purger la mémoire ${afficherMemoireLocalStorage()}`;
+        }
+
+        function purgeAllItems() {
+            const userHideAll = confirm("Voulez-vous également cacher tous les produits ? OK pour oui, Annuler pour non.");
+            const button = document.getElementById('purgeAllItems');
+
+            //Étape 1 : Mise à jour initiale du bouton
+            button.innerHTML = `En cours (0%)`;
+
+            //Étape 2 : Purger les favoris et les caches
+            setTimeout(() => {
+                for (let i = localStorage.length - 1; i >= 0; i--) {
+                    const key = localStorage.key(i);
+                    const isCacheKey = key.includes('_c') || key.includes('_cache');
+                    const isFavoriKey = key.includes('_f') || key.includes('_favori');
+
+                    if (isCacheKey || isFavoriKey) {
+                        // Si c'est une clé favori (_f), vérifier la valeur
+                        if (isFavoriKey && localStorage.getItem(key) === '1') {
+                            continue; // Ne pas supprimer si la valeur vaut '1'
+                        }
+
+                        localStorage.removeItem(key);
+                    }
+                }
+                button.innerHTML = `En cours (33%)`;
+
+                //Étape 3 : Purger la surbrillance
+                setTimeout(() => {
+                    //Charger les produits stockés ou initialiser comme un objet vide si aucun produit n'est trouvé
+                    var storedProducts = JSON.parse(GM_getValue("storedProducts", '{}'));
+
+                    //Parcourir les clés (ASIN) dans storedProducts
+                    for (const asin in storedProducts) {
+                        if (storedProducts.hasOwnProperty(asin)) { // Vérification pour éviter les propriétés héritées
+                            // Purger le produit sans vérifier la date
+                            delete storedProducts[asin];
+                        }
+                    }
+
+                    //Sauvegarder les modifications apportées à storedProducts
+                    GM_setValue("storedProducts", JSON.stringify(storedProducts));
+
+                    button.innerHTML = `En cours (66%)`;
+
+                    //Étape 4 : Synchronisation des produits
+                    setTimeout(() => {
+                        syncProducts(false, userHideAll, false);
+
+                        button.innerHTML = `Terminé (100%)`;
+
+                        //Étape 5 : Mise à jour finale du bouton
+                        setTimeout(() => {
+                            button.innerHTML = `Purger la mémoire ${afficherMemoireLocalStorage()}`;
+                        }, 1000); //1 seconde avant la mise à jour finale
+
+                    }, 1000); //1 seconde avant de passer à la synchronisation des produits
+
+                }, 1000); //1 seconde avant de purger la surbrillance
+
+            }, 1000); //1 seconde avant de purger les favoris et les caches
         }
 
         //On purge les anciens produits
         purgeStoredProducts();
 
-        // On affiche les pages en haut si l'option est activée
+        //On affiche les pages en haut si l'option est activée
         if (paginationEnabled && apiOk) {
-            // Sélection du contenu HTML du div source
+            //Sélection du contenu HTML du div source
             const sourceElement = document.querySelector('.a-text-center');
-            // Vérifier si l'élément source existe
+            //Vérifier si l'élément source existe
             if (sourceElement) {
-                // Maintenant que l'élément source a été mis à jour, copier son contenu HTML
-                const sourceContent = sourceElement.outerHTML;
 
-                // Création d'un nouveau div pour le contenu copié
-                const newDiv = document.createElement('div');
-                newDiv.innerHTML = sourceContent;
-                newDiv.style.textAlign = 'center'; // Centrer le contenu
-                newDiv.style.paddingBottom = '10px'; // Ajouter un petit espace après
-
-                // Sélection du div cible où le contenu sera affiché
-                const targetDiv = document.getElementById('vvp-items-grid-container');
-
-                // S'assurer que le div cible existe avant d'insérer le nouveau div
-                if (targetDiv) {
-                    // Insertion du nouveau div au début du div cible
-                    targetDiv.insertBefore(newDiv, targetDiv.firstChild);
-                }
-                // Trouver ou créer le conteneur de pagination si nécessaire
+                /*//Ajout de pages
+                const numberOfAdditionalPages = 3;
+                const url = new URL(window.location);
+                const params = url.searchParams;
+                const currentPage = parseInt(params.get('page') || '1', 10);
+                let ellipsisElement = null;
+                //Trouver ou créer le conteneur de pagination si nécessaire
                 let paginationContainer = sourceElement.querySelector('.a-pagination');
                 if (!paginationContainer) {
                     paginationContainer = document.createElement('ul');
                     paginationContainer.className = 'a-pagination';
                     sourceElement.appendChild(paginationContainer);
                 }
+                const paginationItems = paginationContainer.querySelectorAll('li.a-disabled[aria-disabled="true"]');
+                paginationItems.forEach(function(item) {
+                    if (item.textContent.trim() === '...') {
+                        ellipsisElement = item;
+                    }
+                });
+
+                // Si l'élément "..." est trouvé, insérer les pages supplémentaires avant lui
+                if (ellipsisElement) {
+                    // Boucle pour créer et insérer les pages supplémentaires
+                    for (let i = 4; i < 4 + numberOfAdditionalPages; i++) {
+                        const pageLi = document.createElement('li');
+                        if (i === currentPage) {
+                            pageLi.className = 'a-selected';
+                            pageLi.innerHTML = `<a href="?page=${i}" aria-current="page">${i}</a>`;
+                        } else {
+                            pageLi.className = 'a-normal';
+                            pageLi.innerHTML = `<a href="?page=${i}">${i}</a>`;
+                        }
+                        // Insérer le nouvel élément avant l'élément "..."
+                        paginationContainer.insertBefore(pageLi, ellipsisElement);
+                    }
+                }
+                //Maintenant que l'élément source a été mis à jour, copier son contenu HTML
+                const sourceContent = sourceElement.outerHTML;
+
+                //Création d'un nouveau div pour le contenu copié
+                const newDiv = document.createElement('div');
+                newDiv.innerHTML = sourceContent;
+                newDiv.style.textAlign = 'center'; // Centrer le contenu
+                newDiv.style.paddingBottom = '10px'; // Ajouter un petit espace après
+
+                //Sélection du div cible où le contenu sera affiché
+                const targetDiv = document.getElementById('vvp-items-grid-container');
+
+                //S'assurer que le div cible existe avant d'insérer le nouveau div
+                if (targetDiv) {
+                    //Insertion du nouveau div au début du div cible
+                    targetDiv.insertBefore(newDiv, targetDiv.firstChild);
+                }*/
+
+                //Maintenant que l'élément source a été mis à jour, copier son contenu HTML
+                const sourceContent = sourceElement.outerHTML;
+
+                //Création d'un nouveau div pour le contenu copié
+                const newDiv = document.createElement('div');
+                newDiv.innerHTML = sourceContent;
+                newDiv.style.textAlign = 'center'; // Centrer le contenu
+                newDiv.style.paddingBottom = '10px'; // Ajouter un petit espace après
+
+                //Sélection du div cible où le contenu sera affiché
+                const targetDiv = document.getElementById('vvp-items-grid-container');
+
+                //S'assurer que le div cible existe avant d'insérer le nouveau div
+                if (targetDiv) {
+                    //Insertion du nouveau div au début du div cible
+                    targetDiv.insertBefore(newDiv, targetDiv.firstChild);
+                }
+                //Trouver ou créer le conteneur de pagination si nécessaire
+                let paginationContainer = sourceElement.querySelector('.a-pagination');
+                if (!paginationContainer) {
+                    paginationContainer = document.createElement('ul');
+                    paginationContainer.className = 'a-pagination';
+                    sourceElement.appendChild(paginationContainer);
+                }
+
                 //Ajout du bouton "Aller à" en haut et en bas
                 if (window.location.href.includes("queue=encore")) {
                     // Création du bouton "Aller à la page X"
                     const gotoButtonUp = document.createElement('li');
-                    gotoButtonUp.className = 'a-last'; // Utiliser la même classe que le bouton "Suivant" pour le style
+                    gotoButtonUp.className = 'a-last'; //Utiliser la même classe que le bouton "Suivant" pour le style
                     gotoButtonUp.innerHTML = `<a id="goToPageButton">${pageX}<span class="a-letter-space"></span><span class="a-letter-space"></span></a>`;
 
                     // Ajouter un événement click au bouton "Aller à"
@@ -2996,7 +3367,7 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
 
                     // Création du bouton "Aller à la page X"
                     const gotoButton = document.createElement('li');
-                    gotoButton.className = 'a-last'; // Utiliser la même classe que le bouton "Suivant" pour le style
+                    gotoButton.className = 'a-last'; //Utiliser la même classe que le bouton "Suivant" pour le style
                     gotoButton.innerHTML = `<a id="goToPageButton">${pageX}<span class="a-letter-space"></span><span class="a-letter-space"></span></a>`;
 
                     // Ajouter un événement click au bouton "Aller à"
@@ -3121,7 +3492,7 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
 #configPopup label.disabled input[type="checkbox"] {
   cursor: not-allowed;
 }
-#saveConfig, #closeConfig, #saveKeyConfig, #closeKeyConfig, #saveFavConfig, #closeFavConfig, #saveColor, #closeColor, #saveNotifConfig, #closeNotifConfig, #saveNote, #closeNote {
+#saveConfig, #closeConfig, #saveKeyConfig, #closeKeyConfig, #syncFavConfig, #saveFavConfig, #closeFavConfig, #saveColor, #closeColor, #saveNotifConfig, #closeNotifConfig, #saveNote, #closeNote {
   padding: 8px 15px !important; /* Plus de padding pour un meilleur visuel */
   margin-top !important: 5px;
   border-radius: 5px !important; /* Bordures légèrement arrondies */
@@ -3136,6 +3507,10 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
   background-color: #4CAF50 !important; /* Vert pour le bouton "Enregistrer" */
 }
 
+#syncFavConfig {
+  background-color: #2196F3 !important; /* Bleu pour le bouton "Synchroniser" */
+}
+
 #closeConfig, #closeKeyConfig, #closeFavConfig, #closeColor, #closeNotifConfig, #closeNote {
   background-color: #f44336 !important; /* Rouge pour le bouton "Fermer" */
 }
@@ -3144,10 +3519,21 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
   background-color: #45a049 !important; /* Assombrit le vert au survol */
 }
 
+#syncFavConfig:hover {
+  background-color: #1976D2 !important; /* Assombrit le bleu au survol */
+}
+
+#syncFavConfig:disabled {
+  background-color: #B0BEC5; /* Couleur grise pour le bouton désactivé */
+  color: #FFFFFF; /* Couleur du texte, si nécessaire */
+  cursor: not-allowed !important; /* Change le curseur pour indiquer que le bouton est désactivé */
+  opacity: 0.6; /* Optionnel : rend le bouton semi-transparent */
+}
+
 #closeConfig:hover, #closeKeyConfig:hover, #closeFavConfig:hover, #closeColor:hover, #closeNotifConfig:hover, #closeNote:hover {
   background-color: #e53935 !important; /* Assombrit le rouge au survol */
 }
-#saveKeyConfig, #closeKeyConfig, #saveFavConfig, #closeFavConfig, #saveColor, #closeColor, #saveNotifConfig, #closeNotifConfig, #saveNote, #closeNote {
+#saveKeyConfig, #closeKeyConfig, #syncFavConfig, #saveFavConfig, #closeFavConfig, #saveColor, #closeColor, #saveNotifConfig, #closeNotifConfig, #saveNote, #closeNote {
   margin-top: 10px; /* Ajoute un espace de 10px au-dessus du second bouton */
   width: 100%; /* Utilise width: 100% pour assurer que le bouton prend toute la largeur */
 }
@@ -3222,6 +3608,54 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             }
         }
 
+        // Fonction pour calculer la taille de localStorage en Mo
+        function calculerTailleLocalStorageEnMo() {
+            let tailleTotale = 0;
+
+            // Parcours de toutes les clés du localStorage
+            for (let i = 0; i < localStorage.length; i++) {
+                let key = localStorage.key(i);
+                let valeur = localStorage.getItem(key);
+
+                // Ajoute la taille de la clé et de la valeur (en octets)
+                tailleTotale += key.length + valeur.length;
+            }
+
+            // Convertit la taille totale en Mo (1 Mo = 1024 * 1024 octets)
+            return (tailleTotale / (1024 * 1024)).toFixed(2); // Limité à 2 décimales
+        }
+
+        // Fonction pour obtenir l'affichage de la mémoire avec couleur
+        function afficherMemoireLocalStorage() {
+            const tailleMaximale = 5; // 5 Mo de capacité maximale pour la plupart des navigateurs
+            const tailleActuelle = parseFloat(calculerTailleLocalStorageEnMo());
+            let utilisation = (tailleActuelle / tailleMaximale) * 100;
+
+            // Limite le pourcentage à 100%
+            if (utilisation > 100) {
+                utilisation = 100;
+            }
+
+            let couleur;
+            // Moins de 50% utilisé, affichage en vert
+            if (utilisation < 50) {
+                couleur = '#008000';
+                // Entre 50% et 90%, affichage en bleu
+            } else if (utilisation >= 50 && utilisation <= 90) {
+                couleur = '#007FFF';
+                // Plus de 90%, affichage en rouge
+            } else {
+                couleur = '#FF0000';
+            }
+
+            // Chaîne avec la taille utilisée et la taille maximale
+            let affichage = `(utilisation : <span style="color:${couleur};">${tailleActuelle} Mo (${utilisation.toFixed(2)}%)</span>)`;
+
+            // Retourner le texte centré
+            //return `<div style="text-align: center;">${affichage}</div>`;
+            return affichage;
+        }
+
         // Crée la fenêtre popup de configuration avec la fonction de déplacement
         async function createConfigPopup() {
             if (document.getElementById('configPopup')) {
@@ -3229,15 +3663,18 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             }
             let isPremiumPlus = false;
             let isPremium = false;
+            let isPlus = false;
             let dateLastSave = false;
             const responsePremiumPlus = await verifyTokenPremiumPlus(API_TOKEN);
             const responsePremium = await verifyTokenPremium(API_TOKEN);
+            const responsePlus = await verifyTokenPlus(API_TOKEN);
             let apiToken = "";
             if (API_TOKEN == undefined) {
                 apiToken = "";
             } else {
                 isPremiumPlus = responsePremiumPlus && responsePremiumPlus.status === 200;
                 isPremium = responsePremium && responsePremium.status === 200;
+                isPlus = responsePlus && responsePlus.status === 200;
                 apiToken = API_TOKEN;
                 if (isPremium) {
                     dateLastSave = await lastSave();
@@ -3253,8 +3690,17 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
   .flex-item-theme {
     flex: 1;
   }
+  .button-container.action-buttons button[disabled] {
+    cursor: not-allowed !important;  /* Curseur spécifique pour indiquer que le bouton est désactivé */
+  }
+
+  .button-container.action-buttons button[disabled]:hover {
+    cursor: not-allowed !important;  /* Le curseur reste le même */
+  }
 `;
             document.head.appendChild(style);
+
+
             const popup = document.createElement('div');
             popup.id = "configPopup";
             popup.innerHTML = `
@@ -3283,19 +3729,23 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
       ${createCheckbox('mobileEnabled', 'Utiliser l\'affichage mobile', 'Optimise l\affichage sur mobile, pour éviter de mettre la "Version PC". Il est conseillé de cacher également l\'entête avec cette option. Non compatible avec l\'affichage du nom complet des produits et l\'affichage réduit')}
       ${createCheckbox('headerEnabled', 'Cacher totalement l\'entête de la page', 'Cache le haut de la page Amazon, celle avec la zone de recherche et les menus')}
       ${createCheckbox('extendedEnabled', 'Afficher le nom complet des produits', 'Affiche 4 lignes, si elles existent, au nom des produits au lieu de 2 en temps normal. Non compatible avec l\'affichage alternatif')}
+      ${createCheckbox('isParentEnabled', 'Distinguer les produits ayant des variantes', 'Ajoute l\'icone 🛍️ dans le texte du bouton des détails si le produit possède des variantes (couleurs, conditionnements, tailles, etc...). Attention, parfois il n\'y aura qu\'une variante, mais le menu déroulant sera probablement présent')}
       ${createCheckbox('wheelfixEnabled', 'Corriger le chargement infini des produits', 'Corrige le bug quand un produit ne charge pas (la petite roue qui tourne sans fin). Attention, même si le risque est très faible, on modifie une information transmise à Amazon, ce qui n\'est pas avec un risque de 0%')}
       ${createCheckbox('fullloadEnabled', 'N\'afficher la page qu\'après son chargement complet', 'Attend le chargement complet des modifications de PickMe avant d\'afficher la page. Cela peut donner la sensation d\'un chargement plus lent de la page mais évite de voir les produits cachés de façon succincte ou le logo Amazon par exemple')}
-      ${createCheckbox('autohideEnabled', 'Cacher/Mettre en avant selon le nom du produit', 'Permet de cacher automatiquement des produits selon des mots clés, ou au contraire d\'en mettre en avant. Peut ajouter de la latence au chargement de la page, surtout si l\'option "N\'afficher la page qu\'après son chargement complet" est activée')}
+      ${createCheckbox('autohideEnabled', 'Utiliser le filtre par mots-clés', 'Permet de cacher automatiquement des produits selon des mots clés, ou au contraire d\'en mettre en avant. La configuration se fait via le bouton "Configurer les mots-clés pour le filtre". Peut ajouter de la latence au chargement de la page, surtout si l\'option "N\'afficher la page qu\'après son chargement complet" est activée')}
       ${createCheckbox('ordersEnabled', 'Afficher code erreur/Envoyer mes commandes', 'Afficher un code erreur quand une commande ne passe pas. Attention, cela envoi également vos commandes sur le serveur pour le besoin de certaines fonctions (comme pouvoir voir le prix par mois/année de vos commandes sur le discord)')}
-      ${createCheckbox('fastCmdEnabled', '(PC) Accélérer le processus de commandes', 'Met le focus sur le bouton pour commander (il suffira donc de faire "Entrée" pour valider) et agrandir la fenêtre contenant les adresses, ce qui alignera les boutons de validation des deux fenêtres si vous souhaitez cliquer')}
       ${createCheckbox('callUrlEnabled', '(Webhook) Appeler une URL lors de la découverte d\'un nouveau produit en recommandation', 'Appelle l\'URL choisie (bouton plus bas) lors de la découverte d\'un nouveau produit en reco. Cela peut être une API ou un MP3 (le fichier doit être donné sous la forme d\'un lien internet). Si c\'est un MP3, il sera également utilisé pour le son des notifications')}
+      ${isPlus ? createCheckbox('fastCmd', '(Admin) Ajouter un bouton de "Commande rapide"', 'Ajoute un bouton sur tous les produits pour commander en un clic. Si le produit à des variantes, la première variante sera choisi. L\'adresse de livraison sera celle du menu déroulant plus bas. \n\nLégende :\n\n- 🚀 : pas de variante\n- 🛍️ : avec variantes') : ''}
+      ${isPlus ? createCheckbox('ordersPercent', '(Admin) Afficher le % de commandes', '') : ''}
+      ${createCheckbox('fastCmdEnabled', '(PC) Accélérer le processus de commandes', 'Met le focus sur le bouton pour commander (il suffira donc de faire "Entrée" pour valider) et agrandir la fenêtre contenant les adresses, ce qui alignera les boutons de validation des deux fenêtres si vous souhaitez cliquer')}
+      ${createCheckbox('recoHReload', '(PC) Recharger la page reco à heure fixe', 'Recharge la page (uniquement celle des recos, celle-ci doit être ouverte pour que ça fonctionne) quand on est une heure fixe (00 minutes, auquel on prend 3 à 8 secondes en plus par sécurité) pour vérifier la reco horaire. Il est conseillé de coupler avec le webhook pour être prévenu. Incompatible sur mobile')}
       ${createCheckbox('notifEnabled', '(Premium) Activer les notifications', 'Affiche une notification lors du signalement d\'un nouvel objet "Disponible pour tous", un up ou autre selon la configuration. Ne fonctionne que si une page Amazon était active dans les dernières secondes ou si le centre de notifications est ouvert en Auto-refresh de moins de 30 secondes',!isPremium)}
-      ${createCheckbox('ordersInfos', '(Premium) Afficher l\'ETV et les informations de la communauté sur les commandes','Affiche l\'ETV du produit (si disponible) ainsi que le nombre de personnes ayant pu commander ou non le produit (rond vert : commande réussie, rond rouge : commande en erreur)', !isPremium)}
+      ${createCheckbox('ordersInfos', '(Premium) Afficher l\'ETV et les informations de la communauté sur les commandes','Affiche l\'ETV du produit, le nombre de variantes et s\'il est limité (si info disponible) ainsi que le nombre de personnes ayant pu commander ou non le produit (rond vert : commande réussie, rond rouge : commande en erreur)', !isPremium)}
       ${createCheckbox('statsEnabled', '(Premium+) Afficher les statistiques produits','Affiche la quantité de produits ajoutés ce jour et dans le mois à côté des catégories', !isPremiumPlus)}
       ${createCheckbox('ordersStatsEnabled', '(Premium+) Afficher le nombre de commandes du jour/mois','Affiche le nombre de commandes passées sur la journée et le mois en cours', !isPremiumPlus)}
     </div>
      <div class="api-token-container">
-      <label for="apiTokenInput">Clef API :</label>
+      <label for="apiTokenInput">Clé API :</label>
       <input type="text" id="apiTokenInput" value="${apiToken}" style="width: 100%; max-width: 480px; margin-bottom: 10px;" />
       <div class="flex-container-theme">
     <div class="theme-container flex-item-theme">
@@ -3319,9 +3769,32 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
       </select>
     </div>
     </div>
+${isPlus ? `
+  <div class="address-selector-container flex-item-theme" style="width: 100%;">
+    <label for="address-selector">Adresse pour la commande rapide :</label>
+    <select id="address-selector" style="width: 100%; margin-bottom: 10px; height: 31px;">
+    </select>
+  </div>
+` : ''}
     ${addActionButtons(!isPremium, !isPremiumPlus, dateLastSave)}
   `;
             document.body.appendChild(popup);
+
+            //Créer la liste déroulante des adresses
+            if (isPlus) {
+                createAddress();
+                document.getElementById('fastCmd').addEventListener('change', function() {
+                    if (this.checked) {
+                        varFastCmd();
+                    } else {
+                        GM_deleteValue('fastCmdVar');
+                    }
+                });
+            } else {
+                GM_setValue('fastCmd', false);
+                GM_setValue('ordersPercent', false);
+                GM_deleteValue('fastCmdVar');
+            }
 
             //Initialiser le thème et choisir celui qui est actif dans la liste
             document.getElementById('themeSelect').value = savedTheme;
@@ -3331,27 +3804,29 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
 
             document.getElementById('cssEnabled').addEventListener('change', function() {
                 if (this.checked) {
-                    document.getElementById('extendedEnabled').checked = false;
                     document.getElementById('mobileEnabled').checked = false;
                 }
             });
+
+            if (document.getElementById('cssEnabled').checked || document.getElementById('fastCmdEnabled').checked || document.getElementById('recoHReload').checked) {
+                document.getElementById('mobileEnabled').checked = false;
+            }
 
             document.getElementById('mobileEnabled').addEventListener('change', function() {
                 if (this.checked) {
-                    document.getElementById('extendedEnabled').checked = false;
                     document.getElementById('cssEnabled').checked = false;
                     document.getElementById('fastCmdEnabled').checked = false;
-                }
-            });
-
-            document.getElementById('extendedEnabled').addEventListener('change', function() {
-                if (this.checked) {
-                    document.getElementById('cssEnabled').checked = false;
-                    document.getElementById('mobileEnabled').checked = false;
+                    document.getElementById('recoHReload').checked = false;
                 }
             });
 
             document.getElementById('fastCmdEnabled').addEventListener('change', function() {
+                if (this.checked) {
+                    document.getElementById('mobileEnabled').checked = false;
+                }
+            });
+
+            document.getElementById('recoHReload').addEventListener('change', function() {
                 if (this.checked) {
                     document.getElementById('mobileEnabled').checked = false;
                 }
@@ -3366,19 +3841,36 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                 }
             });
 
+            document.getElementById('hideEnabled').addEventListener('change', function() {
+                if (this.checked) {
+                    hideBas = window.confirm("Ajouter des boutons en bas de page pour rendre visibles ou cacher (en plus de ceux en haut de page) ?");
+                    GM_setValue('hideBas', hideBas);
+                }
+            });
+
+            document.getElementById('ordersInfos').addEventListener('change', function() {
+                if (this.checked) {
+                    statsInReviews = window.confirm("Afficher également les informations de la communauté sur les commandes dans les avis ?");
+                    GM_setValue('statsInReviews', statsInReviews);
+                }
+            });
+
             document.getElementById('notifEnabled').addEventListener('change', function() {
                 if (this.checked) {
+                    document.getElementById('configurerNotif').disabled = false;
                     // Demander à l'utilisateur s'il est sur mobile ou PC
-                    var onMobile = window.confirm("Êtes-vous sur un appareil mobile ?");
+                    onMobile = window.confirm("Êtes-vous sur un appareil mobile ?");
 
                     // Utilisation de GM pour set la variable
                     GM_setValue('onMobile', onMobile);
 
                     // Demander à l'utilisateur s'il est sur mobile ou PC
-                    var shortcutNotif = window.confirm("Souhaitez-vous ajouter un raccourci vers le centre de notifications  ?");
+                    shortcutNotif = window.confirm("Souhaitez-vous ajouter un raccourci vers le centre de notifications  ?");
 
                     // Utilisation de GM pour set la variable
                     GM_setValue('shortcutNotif', shortcutNotif);
+                } else {
+                    document.getElementById('configurerNotif').disabled = true;
                 }
             });
 
@@ -3389,6 +3881,14 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                     ordersEnabledCheckbox.disabled = true;
                 } else {
                     ordersEnabledCheckbox.disabled = false;
+                }
+            });
+
+            document.getElementById('autohideEnabled').addEventListener('change', function() {
+                if (this.checked) {
+                    document.getElementById('configurerFiltres').disabled = false;
+                } else {
+                    document.getElementById('configurerFiltres').disabled = true;
                 }
             });
 
@@ -3417,7 +3917,9 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
 
             // Ajoute des écouteurs pour les nouveaux boutons
             document.getElementById('configurerNotif').addEventListener('click', configurerNotif);
-            document.getElementById('configurerTouches').addEventListener('click', configurerTouches);
+            document.getElementById('configurerTouches').addEventListener('click', function() {
+                configurerTouches(isPremium);
+            });
             document.getElementById('configurerFiltres').addEventListener('click', configurerFiltres);
             document.getElementById('setHighlightColor').addEventListener('click', setHighlightColor);
             document.getElementById('setHighlightColorFav').addEventListener('click', setHighlightColorFav);
@@ -3430,9 +3932,9 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                 }
             });
             document.getElementById('restoreData').addEventListener('click', () => {
-                if (confirm("Êtes-vous sûr de vouloir restaurer la sauvegarde ?")) {
-                    restoreData();
-                }
+                //if (confirm("Êtes-vous sûr de vouloir restaurer la sauvegarde ?")) {
+                restoreData();
+                //}
             });
             document.getElementById('purgeStoredProducts').addEventListener('click', () => {
                 if (confirm("Êtes-vous sûr de vouloir supprimer les produits enregistrés pour la surbrillance ?")) {
@@ -3442,6 +3944,10 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
 
             document.getElementById('purgeHiddenObjects').addEventListener('click', () => {
                 purgeHiddenObjects(true);
+            });
+
+            document.getElementById('purgeAllItems').addEventListener('click', () => {
+                purgeAllItems();
             });
 
             dragElement(popup);
@@ -3481,6 +3987,71 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             return checkboxHtml;
         }
 
+        //Création de la liste des adresses
+        function createAddress() {
+            // Sélectionnez tous les éléments contenant les adresses
+            const addressOptions = document.querySelectorAll('.vvp-address-option');
+
+            // Sélectionnez la liste déroulante dans laquelle vous voulez insérer les adresses
+            const addressSelector = document.getElementById('address-selector');
+
+            // Récupérer l'adresse sauvegardée dans GM
+            const savedAddress = GM_getValue('savedAddress', null);
+
+            // Vérifiez que l'élément addressSelector existe
+            if (addressSelector) {
+                // Pour chaque option d'adresse trouvée
+                addressOptions.forEach(option => {
+                    // Récupérez l'adresse
+                    const addressLabel = option.querySelector('.a-label').innerText.trim();
+                    const addressValue = option.querySelector('input[type="radio"]').value;
+                    const addressId = option.getAttribute('data-address-id');
+                    const legacyAddressId = option.getAttribute('data-legacy-address-id');
+
+                    // Créez une nouvelle option pour la liste déroulante
+                    const newOption = document.createElement('option');
+                    newOption.value = addressValue;
+                    newOption.textContent = addressLabel;
+
+                    // Ajoutez les data-attributes pour pouvoir les récupérer plus tard
+                    newOption.setAttribute('data-address-id', addressId);
+                    newOption.setAttribute('data-legacy-address-id', legacyAddressId);
+
+                    // Si l'adresse actuelle est celle qui est sauvegardée, la sélectionner
+                    if (savedAddress && addressId === savedAddress.addressId) {
+                        newOption.selected = true;
+                    }
+
+                    // Ajoutez la nouvelle option à la liste déroulante
+                    addressSelector.appendChild(newOption);
+                });
+
+                // Ajout d'un événement pour sauvegarder l'adresse sélectionnée a chaque changement au lieu du bouton sauvegarder
+                //addressSelector.addEventListener('change', saveAddress);
+
+            } else {
+                console.error('L\'élément address-selector est introuvable.');
+            }
+        }
+
+        // Fonction pour sauvegarder l'adresse
+        function saveAddress() {
+            const addressSelector = document.getElementById('address-selector');
+            if (addressSelector) {
+                const selectedOption = addressSelector.options[addressSelector.selectedIndex];
+
+                const selectedAddress = {
+                    label: selectedOption.textContent,
+                    value: selectedOption.value,
+                    addressId: selectedOption.getAttribute('data-address-id'),
+                    legacyAddressId: selectedOption.getAttribute('data-legacy-address-id')
+                };
+
+                // Sauvegarde de l'adresse sélectionnée dans GM
+                GM_setValue('savedAddress', selectedAddress);
+            }
+        }
+
         // Sauvegarde la configuration
         async function saveConfig() {
             document.querySelectorAll('#configPopup input[type="checkbox"]').forEach(input => {
@@ -3493,7 +4064,7 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                 GM_setValue('apiToken', newApiToken);
             } else if (response && response.status === 404) {
                 GM_deleteValue("apiToken");
-                alert("Clef API invalide !");
+                alert("Clé API invalide !");
                 return
             }
             // Enregistrer le thème sélectionné
@@ -3503,6 +4074,10 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             // Enregistrer la couleur des boutons sélectionnée
             const selectedButtonColor = document.getElementById('buttonColorSelect').value;
             GM_setValue('selectedButtonColor', selectedButtonColor);
+
+            //Sauvegarde de l'adresse
+            saveAddress();
+
             //On recharge la page et on ferme le menu
             window.location.reload();
             document.getElementById('configPopup').remove();
@@ -3513,19 +4088,19 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             return `
 <div class="button-container action-buttons">
 
-  <button id="configurerFiltres">Configurer les mots pour le filtre</button>
-
-  <button id="configurerTouches">Configurer les touches</button>
-  <button id="setHighlightColor">Couleur de surbrillance des nouveaux produits</button>
+  <button id="setHighlightColor">Couleur de surbrillance des repop/nouveaux produits</button>
   <button id="setHighlightColorFav">Couleur de surbrillance des produits filtrés</button>
+  <button id="configurerFiltres">Configurer les mots-clés pour le filtre</button>
+  <button id="configurerTouches">(PC) Configurer les raccourcis clavier</button>
   <button id="setUrl">(Webhook) Choisir l'URL</button>
   <button id="testUrl">(Webhook) Tester l'URL</button>
-  <button id="configurerNotif" ${isPremium ? 'disabled style="background-color: #ccc; cursor: not-allowed;"' : ''}>(Premium) Configurer les notifications</button>
-  <button id="syncProducts" ${isPremium ? 'disabled style="background-color: #ccc; cursor: not-allowed;"' : ''}>(Premium) Synchroniser les produits avec le serveur</button>
-  <button id="saveData" ${isPremium ? 'disabled style="background-color: #ccc; cursor: not-allowed;"' : ''}>(Premium) Sauvegarder les paramètres/produits</button>
-  <button id="restoreData" ${isPremium ? 'disabled style="background-color: #ccc; cursor: not-allowed;"' : ''}>(Premium) Restaurer les paramètres/produits${dateLastSave ? ' (' + dateLastSave + ')' : ''}</button>
+  <button id="syncProducts">Synchroniser les produits avec le serveur</button>
+  <button id="configurerNotif" ${isPremium || !notifEnabled ? 'disabled' : ''}>(Premium) Configurer les notifications</button>
+  <button id="saveData" ${isPremium ? 'disabled' : ''}>(Premium) Sauvegarder les paramètres/produits</button>
+  <button id="restoreData" ${isPremium || dateLastSave === "Aucune sauvegarde" ? 'disabled' : ''}>(Premium) Restaurer les paramètres/produits${dateLastSave ? ' (' + dateLastSave + ')' : ''}</button>
   <button id="purgeStoredProducts">Supprimer les produits enregistrés pour la surbrillance</button>
   <button id="purgeHiddenObjects">Supprimer les produits cachés et/ou les favoris</button>
+  <button style="flex-basis: 100%;" id="purgeAllItems">Purger la mémoire ${afficherMemoireLocalStorage()}</button>
 </div>
 <div class="button-container final-buttons">
   <button class="full-width" id="saveConfig">Enregistrer</button>
@@ -3537,9 +4112,8 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
         // Ajouter la commande de menu "Paramètres"
         GM_registerMenuCommand("Paramètres", createConfigPopup, "p");
 
-
         // Fonction pour créer la fenêtre popup de configuration des touches
-        function createKeyConfigPopup() {
+        function createKeyConfigPopup(isPremium) {
             // Vérifie si une popup existe déjà et la supprime si c'est le cas
             const existingPopup = document.getElementById('keyConfigPopup');
             if (existingPopup) {
@@ -3561,6 +4135,7 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
         ${createKeyInput('keyDown', 'Onglet précédent (flêche : ArrowDown)')}
         ${createKeyInput('keyHide', 'Tout cacher')}
         ${createKeyInput('keyShow', 'Tout montrer')}
+        ${createKeyInput('keySync', 'Synchroniser les produits avec le serveur et tout cacher')}
 <div class="button-container final-buttons">
   <button class="full-width" id="saveKeyConfig">Enregistrer</button>
   <button class="full-width" id="closeKeyConfig">Fermer</button>
@@ -3579,19 +4154,20 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
         }
 
         // Crée les champs de saisie pour les touches
-        function createKeyInput(id, label) {
+        function createKeyInput(id, label, disabled = false) {
             const value = GM_getValue(id, ''); // Récupère la valeur actuelle ou une chaîne vide par défaut
+            const disabledAttribute = disabled ? 'disabled' : ''; // Détermine si l'attribut disabled doit être ajouté
             return `
         <div style="margin-top: 10px;">
             <label for="${id}" style="display: block;">${label}</label>
-            <input type="text" id="${id}" name="${id}" value="${value}" style="width: 100%; box-sizing: border-box; padding: 8px; margin-top: 4px;">
+            <input type="text" id="${id}" name="${id}" value="${value}" style="width: 100%; box-sizing: border-box; padding: 8px; margin-top: 4px;" ${disabledAttribute}>
         </div>
     `;
         }
 
         // Fonction pour enregistrer la configuration des touches
         function saveKeyConfig() {
-            const keys = ['keyLeft', 'keyRight', 'keyUp', 'keyDown', 'keyHide', 'keyShow'];
+            const keys = ['keyLeft', 'keyRight', 'keyUp', 'keyDown', 'keyHide', 'keyShow', 'keySync'];
             keys.forEach(key => {
                 const inputValue = document.getElementById(key).value;
                 GM_setValue(key, inputValue);
@@ -3621,7 +4197,7 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
     ${createCheckbox('notifFav', 'Filtrer "Autres articles"', 'Utilise les filtres (soit celui des favoris, soit celui pour exclure) pour ne remonter que les notifications favoris ou sans mots exclus et uniquement si c\'est un produit "Autres articles" (aucun filtre sur "Disponibles pour tous"). La notification apparaitra tout de même dans le centre de notifications. Prend en compte le filtre, même si l\'option des filtres est désactivée')}
     ${createCheckbox('notifSound', 'Jouer un son', 'Permet de jouer un son à réception d\'une notification. Astuce : pour personnaliser le son, il est possible d\'utiliser l\'option expérimentale pour saisir l\'URL du mp3 (uniquement) de votre choix')}
     <select id="filterOptions" ${notifFav ? '' : 'disabled'} style="margin-bottom: 10px;">
-       <option value="notifFavOnly" ${filterOption === 'notifFavOnly' ? 'selected' : ''}>Ne voir que les favoris</option>
+       <option value="notifFavOnly" ${filterOption === 'notifFavOnly' ? 'selected' : ''}>Ne voir que les produits avec mots-clés</option>
        <option value="notifExcludeHidden" ${filterOption === 'notifExcludeHidden' ? 'selected' : ''}>Tout voir sauf mots exclus</option>
     </select>
     ${createCheckbox('onMobile', 'Version mobile')}
@@ -3670,13 +4246,15 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
         }
 
         // Fonction pour créer la fenêtre popup de configuration des filtres
-        function createFavConfigPopup() {
+        async function createFavConfigPopup() {
             // Vérifie si une popup existe déjà et la supprime si c'est le cas
             const existingPopup = document.getElementById('favConfigPopup');
             if (existingPopup) {
                 existingPopup.remove();
             }
-
+            let isRole = false;
+            const responseRole = await verifyTokenRole(API_TOKEN);
+            isRole = responseRole && responseRole.status === 200;
             // Crée la fenêtre popup
             const popup = document.createElement('div');
             popup.id = "favConfigPopup";
@@ -3685,11 +4263,12 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
         width: 600px;
     `;
             popup.innerHTML = `
-        <h2 id="configPopupHeader">Configuration des filtres<span id="closeFavPopup" style="float: right; cursor: pointer;">&times;</span></h2>
+        <h2 id="configPopupHeader">Configuration des mots-clés<span id="closeFavPopup" style="float: right; cursor: pointer;">&times;</span></h2>
         <div>
-            <label for="favWords">Produits favoris :</label>
+            <label for="favWords">Produits à mettre en avant :</label>
             <textarea id="favWords" name="favWords" style="width: 100%; height: 70px;">${GM_getValue('favWords', '')}</textarea>
         </div>
+        <button class="full-width" id="syncFavConfig" ${isRole ? '' : 'disabled'}>(Synchroniser) Envoyer la liste vers discord</button>
         <div style="margin-top: 10px;">
             <label for="hideWords">Produits à cacher/exclure :</label>
             <textarea id="hideWords" name="hideWords" style="width: 100%; height: 110px">${GM_getValue('hideWords', '')}</textarea>
@@ -3705,6 +4284,7 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             //dragElement(popup); // Utilise ta fonction existante pour rendre la popup déplaçable
 
             // Ajout des écouteurs d'événements pour les boutons
+            document.getElementById('syncFavConfig').addEventListener('click', syncFavConfig);
             document.getElementById('saveFavConfig').addEventListener('click', saveFavConfig);
             document.getElementById('closeFavConfig').addEventListener('click', () => document.getElementById('favConfigPopup').remove());
             document.getElementById('closeFavPopup').addEventListener('click', () => {
@@ -3721,9 +4301,52 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             document.getElementById('favConfigPopup').remove(); // Ferme la popup après enregistrement
         }
 
+        function syncFavConfig() {
+            if (confirm('Cela remplacera votre liste de mots-clés sur discord par celle de PickMe, êtes-vous sûr ?')) {
+                const favWords = document.getElementById('favWords').value;
+                const formData = new URLSearchParams({
+                    version: version,
+                    token: API_TOKEN,
+                    keywords: favWords,
+                });
+
+                return fetch("https://pickme.alwaysdata.net/shyrka/synckeywords", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    body: formData.toString()
+                })
+                    .then(response => {
+                    if (response.status === 200) {
+                        //On récupère le texte de la réponse
+                        return response.text().then(text => {
+                            const syncButton = document.getElementById('syncFavConfig');
+                            const originalText = syncButton.textContent;
+                            syncButton.innerHTML = text;
+                            setTimeout(() => {
+                                syncButton.textContent = originalText;
+                            }, 2000);
+                            return {status: response.status, responseText: text};
+                        });
+                    } else if (response.status === 201) {
+                        const syncButton = document.getElementById('syncFavConfig');
+                        syncButton.innerHTML = 'Non autorisé';
+                        syncButton.disabled = true;
+                        return "Non autorisé";
+                    } else {
+                        throw new Error("Erreur lors de la récupération de la dernière sauvegarde");
+                    }
+                })
+                    .catch(error => {
+                    throw new Error("Erreur lors de la récupération de la dernière sauvegarde : " + error);
+                });
+            }
+        }
+
         // Modification de la fonction configurerTouches pour ouvrir la popup
-        function configurerTouches() {
-            createKeyConfigPopup();
+        function configurerTouches(isPremium) {
+            createKeyConfigPopup(isPremium);
         }
         function configurerFiltres() {
             createFavConfigPopup();
@@ -3733,7 +4356,7 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
         }
         //End
 
-        // Removes old products if they've been in stored for 90+ days
+        //Supprime les produits la depuis plus de 90 jours
         function purgeOldItems() {
             const items = GM_getValue("config");
             const storedProducts = JSON.parse(GM_getValue("storedProducts", '{}'));
@@ -3750,7 +4373,6 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
         }
         //purgeOldItems();
 
-        // Comment gets truncated by its lists, since the lengths of those are unknown, and we'll just say how many more there are at the end
         function truncateString(originalString) {
             var arr = originalString.split('\n');
             var tooLong = true;
@@ -3770,7 +4392,7 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             while (tooLong) {
 
                 if (count > 30) {
-                    tooLong = false; // in the rare likelihood that this will loop forever
+                    tooLong = false;
                 }
 
                 for (let x=0; x<arr.length; x++) {
@@ -3781,8 +4403,8 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                     }
 
                     if (split.length > 1 && fullArrayLength > MAX_COMMENT_LENGTH && compareItemLengths(x)) {
-                        variantQuantities[x] = split.length - 1; // keep track of this index's array length
-                        variantsRemoved[x] = (variantsRemoved.hasOwnProperty(x)) ? variantsRemoved[x]+1 : 1; // used for tracking the number of variants that were truncated
+                        variantQuantities[x] = split.length - 1;
+                        variantsRemoved[x] = (variantsRemoved.hasOwnProperty(x)) ? variantsRemoved[x]+1 : 1;
                         split.pop();
                         arr[x] = split.join(' ● ');
                         arr[x] += `** ... +${variantsRemoved[x]} more**`;
@@ -3792,7 +4414,6 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                 }
 
                 if (!(arr.join('\n').length > MAX_COMMENT_LENGTH)) {
-                    // the string is finally short enough to be sent over the API
                     truncatedString = arr.join('\n');
                     tooLong = false;
                 }
@@ -3802,69 +4423,311 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             return truncatedString.trim();
         }
 
+        //Fast command
+        function addFastCmd() {
+            const savedAddress = GM_getValue('savedAddress', null);
+            const dataFastCmd = GM_getValue('fastCmdVar', null);
+            let addressId = null;
+            let legacyAddressId = null;
+            // Vérifier si un objet a été récupéré
+            if (savedAddress && dataFastCmd) {
+                // Stocker les valeurs de addressId et legacyAddressId dans les variables
+                addressId = savedAddress.addressId;
+                legacyAddressId = savedAddress.legacyAddressId;
+            } else {
+                return;
+            }
+
+            const csrfToken = document.querySelector("input[name='csrf-token']").value;
+
+            function createCartPurchaseButton(item) {
+                const isParent = item.querySelector('input').getAttribute('data-is-parent-asin') === 'true'
+
+                const asin = item.querySelector('.vvp-details-btn .a-button-input').dataset.asin
+                const recommendationId = item.getAttribute('data-recommendation-id')
+
+                const cartButton = document.createElement('button')
+                cartButton.type = 'button'
+                cartButton.className = 'a-button a-button-primary'
+                //cartButton.style.height = '30px'
+                if (mobileEnabled || cssEnabled) {
+                    cartButton.style.display = 'block'
+                    cartButton.style.marginLeft = '8px';
+                    cartButton.style.setProperty('margin-top', '3px', 'important');
+                } else {
+                    cartButton.style.setProperty('margin-top', '-10px', 'important');
+                }
+                //Bouton pour produit unique ou avec variantes
+                const buttonText = (mobileEnabled || cssEnabled)
+                ? (isParent ? '🚀' : '🚀')
+                : (isParent ? '🚀 Commande rapide' : '🚀 Commande rapide');
+
+                const paddingStyle = (mobileEnabled || cssEnabled) ? 'padding: 4px 8px;' : '';
+
+                cartButton.innerHTML = `<span class="a-button-inner"><span class="a-button-text emoji" style="${paddingStyle}">${buttonText}</span></span>`;
+                cartButton.onclick = () => cartPurchase(recommendationId, asin, isParent)
+                item.querySelector('.vvp-item-tile-content').appendChild(cartButton)
+            }
+
+            function showOrderResult(result, error) {
+                if (result != null) {
+                    let orderId = result.orderId;
+                    let targetDiv = document.getElementById("vvp-scheduled-delivery-required-msg");
+                    let newDiv = document.createElement("div");
+
+                    newDiv.id = "vvp-generic-order-success-msg";
+                    newDiv.className = "a-box a-alert a-alert-success";
+                    newDiv.setAttribute("aria-live", "polite");
+                    newDiv.setAttribute("aria-atomic", "true");
+
+                    newDiv.innerHTML = '<div class="a-box-inner a-alert-container">' +
+                        '<h4 class="a-alert-heading">Réussite&nbsp;!</h4>' +
+                        '<i class="a-icon a-icon-alert"></i>' +
+                        '<div class="a-alert-content">Votre demande de produit a été soumise.</div><strong>(Commande rapide PickMe) Numéro de commande : ' + orderId +
+                        '</strong></div>';
+
+                    targetDiv.insertAdjacentElement('afterend', newDiv);
+                } else {
+                    let targetDiv = document.getElementById("vvp-scheduled-delivery-required-msg");
+                    let newDiv = document.createElement("div");
+
+                    newDiv.id = "vvp-generic-request-error-msg";
+                    newDiv.className = "a-box a-alert a-alert-error";
+                    newDiv.setAttribute("role", "alert");
+
+                    newDiv.innerHTML = '<div class="a-box-inner a-alert-container">' +
+                        '<h4 class="a-alert-heading">Erreur</h4>' +
+                        '<i class="a-icon a-icon-alert"></i>' +
+                        '<div class="a-alert-content">' +
+                        'Un problème est survenu lors de la création de votre demande. Demandez un autre article.<br><strong>(Commande rapide PickMe) Code erreur : ' + error +
+                        '</strong> (<a href="https://pickme.alwaysdata.net/wiki/doku.php?id=plugins:pickme:codes_erreur" target="_blank">wiki des codes d\'erreurs</a>)</div>' +
+                        '</div>';
+
+                    targetDiv.insertAdjacentElement('afterend', newDiv);
+                }
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
+            async function cartPurchase(recommendationId, asin, isParent) {
+                //Prendre la première variation d'un produit
+                if (isParent) {
+                    const encodedId = encodeURIComponent(recommendationId)
+                    const url = `https://www.amazon.fr/vine/api/recommendations/${encodedId}`
+
+                    try {
+                        const response = await fetch(url)
+                        const data = await response.json()
+                        asin = data.result?.variations?.[0]?.asin
+                    } catch (error) {
+                        console.log('PickMe FastCmd error fetching variation ASIN', error)
+                        return
+                    }
+                }
+
+                //On check que tout a une valeur
+                if (!recommendationId || !asin || !addressId || !legacyAddressId || !csrfToken || !dataFastCmd) {
+                    console.log('PickMe FastCmd : Impossible, données manquantes')
+                    return
+                }
+
+                const payload = JSON.stringify({
+                    recommendationId: recommendationId,
+                    recommendationType: "SEARCH",
+                    itemAsin: asin,
+                    addressId: addressId,
+                    legacyAddressId: legacyAddressId
+                })
+
+                try {
+                    const req = await fetch(dataFastCmd, {
+                        method: 'POST',
+                        body: payload,
+                        headers: {
+                            'anti-csrftoken-a2z': csrfToken,
+                            'content-type': 'application/json'
+                        }
+                    })
+
+                    const response = await req.json()
+
+                    //Lignes de tests
+                    //var response = '{"result":null,"error":"ITEM_NOT_IN_ENROLLMENT"}';
+                    //var response = '{"result":{"orderId":"404-12345-6789","legacyOrderId":null,"recommendationType":null,"recommendationId":null,"itemAsin":null,"customerId":null,"addressId":null,"legacyAddressId":null,"slateToken":null},"error":null}'
+                    //var responseObject = JSON.parse(response);
+                    //console.log(responseObject);
+
+                    var responseObject = JSON.parse(JSON.stringify(response));
+                    var result = responseObject.result;
+                    var error = responseObject.error;
+                    showOrderResult(result, error);
+                } catch (error) {
+                    console.log('PickMe FastCmd failed : ', error)
+                }
+            }
+
+            document.body.querySelectorAll('.vvp-item-tile').forEach(createCartPurchaseButton)
+        }
+
+        //Met a jour le bouton s'il y a des variantes du produit
+        function changeButtonProduct(item) {
+            const isParent = item.querySelector('input').getAttribute('data-is-parent-asin') === 'true'
+            var button = item.querySelector('.a-button-text');
+            var newText = "";
+            if (isParent && isParentEnabled) {
+                newText = "🛍️ ";
+            }
+            if (mobileEnabled || cssEnabled) {
+                newText = newText + "Détails";
+            } else {
+                newText = newText + "Voir les détails";
+            }
+            button.textContent = newText;
+        }
+
+        //Met a jour le bouton s'il y a des variantes du produit, en fonction du retour de l'API avec l'info limited et le nb de variantes
+        function changeButtonProductPlus(item, limited = 0, nb_variations = 0) {
+            const isParent = item.querySelector('input').getAttribute('data-is-parent-asin') === 'true'
+            var button = item.querySelector('.a-button-text');
+            var newText = "";
+            var showDetails = true;
+            if (limited == '1') {
+                newText = newText + "⌛ ";
+                showDetails = false;
+            }
+            if (isParent && isParentEnabled && nb_variations > 1) {
+                newText = newText + "🛍️ (" + nb_variations + ") ";
+                showDetails = false;
+            } else if (isParent && isParentEnabled && nb_variations == 0) {
+                newText = newText + "🛍️ ";
+                showDetails = false;
+            }
+            if (mobileEnabled || cssEnabled) {
+                if (showDetails) {
+                    newText = newText + "Détails";
+                }
+            } else {
+                newText = newText + "Voir les détails";
+            }
+            button.textContent = newText;
+        }
+
         function verifyToken(token) {
-            return new Promise((resolve, reject) => {
-                GM_xmlhttpRequest({
-                    method: "GET",
-                    url: `https://pickme.alwaysdata.net/shyrka/user/${token}`,
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded",
-                    },
-                    onload: function(response) {
-                        //console.log(response.status, response.responseText);
-                        resolve(response);
-                    },
-                    onerror: function(error) {
-                        console.error(error);
-                        reject(error);
-                    },
-                });
+            return fetch(`https://pickme.alwaysdata.net/shyrka/user/${token}`, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                }
+            })
+                .then(response => response.text().then(text => {
+                return {status: response.status, statusText: response.statusText, responseText: text};
+            }))
+                .catch(error => {
+                console.error(error);
+                throw error;
             });
         }
 
-        function verifyTokenPremiumPlus(token) {
-            return new Promise((resolve, reject) => {
-                GM_xmlhttpRequest({
+        async function verifyTokenPremiumPlus(token) {
+            try {
+                const response = await fetch(`https://pickme.alwaysdata.net/shyrka/userpremiumplus/${token}`, {
                     method: "GET",
-                    url: `https://pickme.alwaysdata.net/shyrka/userpremiumplus/${token}`,
                     headers: {
                         "Content-Type": "application/x-www-form-urlencoded",
-                    },
-                    onload: function(response) {
-                        //console.log(response.status, response.responseText);
-                        resolve(response);
-                    },
-                    onerror: function(error) {
-                        console.error(error);
-                        reject(error);
-                    },
+                    }
                 });
-            });
+
+                const text = await response.text();
+                return { status: response.status, statusText: response.statusText, responseText: text };
+            } catch (error) {
+                console.error("Erreur dans verifyTokenPremiumPlus :", error);
+                throw error;
+            }
         }
 
-        function verifyTokenPremium(token) {
-            return new Promise((resolve, reject) => {
-                GM_xmlhttpRequest({
+        async function verifyTokenPremium(token) {
+            try {
+                const response = await fetch(`https://pickme.alwaysdata.net/shyrka/userpremium/${token}`, {
                     method: "GET",
-                    url: `https://pickme.alwaysdata.net/shyrka/userpremium/${token}`,
                     headers: {
                         "Content-Type": "application/x-www-form-urlencoded",
-                    },
-                    onload: function(response) {
-                        //console.log(response.status, response.responseText);
-                        resolve(response);
-                    },
-                    onerror: function(error) {
-                        console.error(error);
-                        reject(error);
-                    },
+                    }
                 });
+
+                const text = await response.text();
+                return { status: response.status, statusText: response.statusText, responseText: text };
+            } catch (error) {
+                console.error("Erreur dans verifyTokenPremium :", error);
+                throw error;
+            }
+        }
+
+        async function verifyTokenPlus(token) {
+            try {
+                const response = await fetch(`https://pickme.alwaysdata.net/shyrka/userplus/${token}`, {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    }
+                });
+
+                const text = await response.text();
+                return { status: response.status, statusText: response.statusText, responseText: text };
+            } catch (error) {
+                console.error("Erreur dans verifyTokenPlus :", error);
+                throw error;
+            }
+        }
+
+        async function verifyTokenRole(token) {
+            try {
+                const response = await fetch(`https://pickme.alwaysdata.net/shyrka/userrole/${token}`, {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    }
+                });
+
+                const text = await response.text();
+                return { status: response.status, statusText: response.statusText, responseText: text };
+            } catch (error) {
+                console.error("Erreur dans verifyTokenRole :", error);
+                throw error;
+            }
+        }
+
+        //Info serveur pour les commandes rapides
+        function varFastCmd() {
+            const formData = new URLSearchParams({
+                version: version,
+                token: API_TOKEN,
+            });
+
+            return fetch("https://pickme.alwaysdata.net/shyrka/fastcmd", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: formData.toString()
+            })
+                .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.status} ${response.statusText}`);
+                }
+                return response.json();
+            })
+                .then(varData => {
+                const data = varData.data;
+                GM_setValue("fastCmdVar", data);
+                return { status: 200, responseText: JSON.stringify(varData) };
+            })
+                .catch(error => {
+                throw error;
             });
         }
 
         async function askForToken(reason) {
             return new Promise(async (resolve, reject) => {
-                var userInput = prompt(`Votre clef API est ${reason}. Merci d'entrer une clef API valide:`);
+                var userInput = prompt(`Votre clé API est ${reason}. Merci d'entrer une clé API valide:`);
 
                 if (userInput !== null) {
                     try {
@@ -3875,11 +4738,11 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                             resolve(userInput);
                         } else if (response && response.status === 404) {
                             GM_deleteValue("apiToken");
-                            alert("Clef API invalide !");
+                            alert("Clé API invalide !");
                             reject("Invalid API token");
                         } else {
                             GM_deleteValue("apiToken");
-                            alert("Vérification de la clef échoué. Merci d'essayer plus tard.");
+                            alert("Vérification de la clé échoué. Merci d'essayer plus tard.");
                             reject("Authorization failed");
                         }
                     } catch (error) {
@@ -3930,6 +4793,45 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             return variations;
         }
 
+        function generateCombinations(variations) {
+            const variationKeys = Object.keys(variations);
+            const variationValues = variationKeys.map(key => variations[key]);
+
+            //Vérifier s'il y a au moins une variation avec des options
+            if (variationValues.length === 0) {
+                return [];
+            }
+
+            //Fonction pour calculer le produit cartésien avec gestion des cas spéciaux
+            function cartesianProduct(arrays) {
+                if (!arrays || arrays.length === 0) {
+                    return [];
+                }
+                if (arrays.length === 1) {
+                    //Retourner un tableau de tableaux pour maintenir la cohérence
+                    return arrays[0].map(item => [item]);
+                }
+                return arrays.reduce((acc, curr) => {
+                    return acc.flatMap(accItem => {
+                        return curr.map(currItem => {
+                            return [].concat(accItem, currItem);
+                        });
+                    });
+                });
+            }
+
+            const combinations = cartesianProduct(variationValues);
+
+            //Transformer les combinaisons en objets avec les clés appropriées
+            return combinations.map(combination => {
+                const comboObject = {};
+                combination.forEach((value, index) => {
+                    comboObject[variationKeys[index]] = value;
+                });
+                return comboObject;
+            });
+        }
+
         function variationFormatting(variations) {
             var str = (Object.keys(variations).length > 1) ? ':arrow_down: Dropdowns' : ':arrow_down: Dropdown';
             for (const type in variations) {
@@ -3947,16 +4849,27 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             return str;
         }
 
-        // Checks if each dropdown has more than 1 option
-        // Useful for pointing out misleading parent products
         function countVariations(obj) {
             for (const key in obj) {
                 if (Array.isArray(obj[key]) && obj[key].length > 1) {
-                    return false; // If there are multiple variations, then we're better off not alerting anyone
+                    return false;
                 }
             }
             return true;
         }
+
+        //PickMe Add
+        //Compte le nombre de variations d'un objet
+        function nbVariations(obj) {
+            let total = 1;
+            for (const key in obj) {
+                if (Array.isArray(obj[key]) && obj[key].length > 0) {
+                    total *= obj[key].length;
+                }
+            }
+            return total;
+        }
+        //PickMe End
 
         function writeComment(productData) {
             var hasNoSiblings = countVariations(productData.variations);
@@ -3971,16 +4884,16 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             (notes.length > 0) ? comment.push(noteFormatting(notes)) : null;
 
             if (comment.length > MAX_COMMENT_LENGTH) {
-                comment = truncateString(comment); // Comment truncation, if necessary
+                comment = truncateString(comment);
             }
 
             comment = comment.join('\n');
-            comment = comment?.replace("\n", "\n\n"); // A fix for the weird formatting issue where the 1st line break requires 2 newlines instead of 1
+            comment = comment?.replace("\n", "\n\n");
 
             return comment;
         }
 
-        // Triggers when the Discord button is clicked
+        //Quand on clic sur le bouton discord
         async function buttonHandler() {
 
             //Données pour transmissions
@@ -3991,16 +4904,20 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             productData.variations = (Object.keys(variations).length > 0) ? variations : null;
             productData.isLimited = (document.querySelector('#vvp-product-details-modal--limited-quantity').style.display !== 'none') ? true : false;
             productData.asin = parentAsin;
-            productData.differentChild = (parentAsin !== childAsin) ? true : false; // comparing the asin loaded in the modal to the one on the webpage
+            productData.enrollment = parentEnrollment;
+            productData.differentChild = (parentAsin !== childAsin) ? true : false; //comparing the asin loaded in the modal to the one on the webpage
             productData.differentImages = (parentImage !== childImage.src?.match(PRODUCT_IMAGE_ID)[1]) ? true : false;
             productData.etv = document.querySelector("#vvp-product-details-modal--tax-value-string")?.innerText.replace("€", "");
             productData.queue = queueType;
             productData.seller = document.querySelector("#vvp-product-details-modal--by-line").innerText.replace(/^par /, '');
-            productData.comments = writeComment(productData);
+            //productData.comments = writeComment(productData);
 
             const response = await sendDataToAPI(productData);
 
             var listOfItems = GM_getValue('config');
+            //Test pour supprimer un partage
+            //const asintest = "B0D25RX87G";
+            //listOfItems[asintest] = {};
 
             if (response) {
                 if (response.status == 200) {
@@ -4126,7 +5043,7 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                 discordBtn.classList.add('a-button-disabled');
                 discordBtn.style.cursor = 'no-drop';
             } else if (type == 5) { // API: invalid token
-                discordBtn.innerHTML = `${btn_error}<span class="a-button-text">Clef API invalide</span>`;
+                discordBtn.innerHTML = `${btn_error}<span class="a-button-text">Clé API invalide</span>`;
                 discordBtn.disabled = true;
                 discordBtn.classList.add('a-button-disabled');
                 discordBtn.style.cursor = 'no-drop';
@@ -4146,42 +5063,260 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
 
         //PickMe edit
         function sendDataToAPI(data) {
-
             const formData = new URLSearchParams({
                 version: version,
                 token: API_TOKEN,
                 page: valeurPage,
                 tab: valeurQueue,
                 asin: data.asin,
+                enrollment: data.enrollment,
+                seller: data.seller,
+                isLimited: data.isLimited,
+                variations: JSON.stringify(data.variations),
                 etv: data.etv,
-                comment: data.comments,
+                nb_variations: nbVariations(data.variations),
             });
             //End
             updateButtonIcon(1);
 
-            return new Promise((resolve, reject) => {
-                GM_xmlhttpRequest({
-                    method: "PUT",
-                    url: "https://pickme.alwaysdata.net/shyrka/product",
-                    data: formData.toString(),
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded",
-                    },
-                    onload: function(response) {
-                        console.log(response.status, response.responseText);
-                        resolve(response);
-                    },
-                    onerror: function(error) {
-                        console.error(error);
-                        updateButtonIcon(6);
-                        reject(error);
-                    },
+            return fetch("https://pickme.alwaysdata.net/shyrka/newproduct", {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: formData.toString()
+            })
+                .then(response => {
+                return response.text().then(text => {
+                    console.log(response.status, text);
+                    return {status: response.status, statusText: response.statusText, responseText: text};
                 });
+            })
+                .catch(error => {
+                console.error(error);
+                updateButtonIcon(6);
+                throw error;
             });
-
         }
 
         //PickMe add
+        //Affichage de l'onglet "Favoris"
+        function addFavTab() {
+            if (window.location.href.startsWith('https://www.amazon.fr/vine/vine-items')) {
+                mesFavoris();
+            }
+        }
+
+        if (urlPattern.test(window.location.href)) {
+            //Fix iPhone
+            if (document.readyState !== 'loading') {
+                addFavTab();
+                addTab();
+            }
+            else {
+                document.addEventListener('DOMContentLoaded', function () {
+                    addFavTab();
+                    addTab();
+                });
+            }
+        }
+
+        //Afficher l'onglet "Favoris"
+        function mesFavoris() {
+            const MAX_fS = 200; // Limite des favoris affichés
+
+            if (apiKey && hideEnabled) {
+                // Ajouter un nouvel onglet dans le menu
+                const menu = document.querySelector('.a-tabs');
+                const newTab = document.createElement('li');
+                newTab.className = 'a-tab-heading';
+                newTab.innerHTML = '<a href="javascript:void(0);" id="favorisTab" role="tab" aria-selected="false" tabindex="-1" style="color: #f8a103;">Favoris</a>';
+                menu.appendChild(newTab);
+
+                // Ajouter le conteneur pour afficher les favoris
+                const container = document.createElement('div');
+                container.id = 'favorisContainer';
+                container.style.display = 'none';
+                container.className = 'a-container vvp-body';
+                container.innerHTML = `
+            <div class="a-box a-tab-content" role="tabpanel" tabindex="0">
+                <div class="a-box-inner">
+                    <div class="a-section vvp-tab-content">
+                        <div class="vvp-orders-table--heading-top" style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3 id="favorisCount">Favoris (0)</h3>
+                            <span class="a-button a-button-primary vvp-orders-table--action-btn">
+                                <span class="a-button-inner">
+                                    <button id="supprimerTousFavoris" class="a-button-input" aria-labelledby="supprimer-tous"></button>
+                                    <span class="a-button-text" aria-hidden="true" id="supprimer-tous">Tout supprimer</span>
+                                </span>
+                            </span>
+                        </div>
+                        <table class="a-normal vvp-orders-table">
+                            <thead>
+                                <tr class="vvp-orders-table--heading-row">
+                                    <th id="vvp-orders-table--image-col-heading"></th>
+                                    <th id="vvp-orders-table--product-title-heading" class="vvp-orders-table--text-col aok-nowrap" style="padding-bottom: 15px;">Produit</th>
+                                    <th id="vvp-orders-table--order-date-heading" class="vvp-orders-table--text-col aok-nowrap" style="padding-bottom: 10px;">Vu pour la dernière fois</th>
+                                    <th id="vvp-orders-table--actions-col-heading"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="favorisList"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+                document.querySelector('#a-page > div.a-container.vvp-body > div.a-tab-container.vvp-tab-set-container').appendChild(container);
+
+                // Ajouter du style pour l'espace au-dessus de la première ligne de produit
+                const style = document.createElement('style');
+                style.textContent = `
+            tr:first-child td, tr:first-child th {
+                padding-top: 15px;
+            }
+            #favorisContainer {
+                padding: 0;
+            }
+            .a-tab-content {
+                border-radius: 0 0 8px 8px;
+            }
+        `;
+                document.head.appendChild(style);
+
+                // Fonction pour afficher les favoris
+                async function afficherFavoris() {
+                    const favorisList = document.getElementById('favorisList');
+                    favorisList.innerHTML = ''; // Réinitialiser la liste des favoris
+
+                    const favoris = [];
+                    const listASINS = [];
+                    const promises = Object.keys(localStorage).map(async (key) => {
+                        if (key.endsWith('_f')) {
+                            const favori = localStorage.getItem(key);
+                            if (favori === '1') {
+                                const asin = key.split('_f')[0]; // Extraire l'ASIN de la clé
+                                listASINS.push("https://www.amazon.fr/dp/" + asin);
+                                try {
+                                    const productInfo = await infoProduct(asin); // Appel à la fonction infoProduct avec l'ASIN
+                                    const lastSeenDate = productInfo.date_last_eu ? parseEuropeanDate(productInfo.date_last_eu) : null;
+                                    const timeDiff = lastSeenDate ? new Date() - lastSeenDate : 0;
+                                    favoris.push({ asin, key, productInfo, timeDiff });
+                                } catch (error) {
+                                    console.error("Erreur lors de la récupération des informations du produit:", error);
+                                }
+                            }
+                        }
+                    });
+
+                    await Promise.all(promises);
+
+                    // Trier les favoris : ceux avec timeDiff = 0 en premier, puis par timeDiff croissant
+                    favoris.sort((a, b) => {
+                        if (a.timeDiff === 0) return -1;
+                        if (b.timeDiff === 0) return 1;
+                        return a.timeDiff - b.timeDiff;
+                    });
+
+                    // Limiter les favoris à MAX_fS
+                    const favorisAffiches = favoris.slice(0, MAX_fS);
+
+                    // Mettre à jour le titre avec le nombre de favoris affichés
+                    document.querySelector('#favorisCount').textContent = `Favoris (${favorisAffiches.length})`;
+
+                    // Fonction pour convertir une date européenne en format de date interprétable
+                    function parseEuropeanDate(dateStr) {
+                        const [day, month, year, hours, minutes, seconds] = dateStr.split(/[/ :]/);
+                        return new Date(`${year}-${month}-${day}T${hours}:${minutes}:${seconds}`);
+                    }
+
+                    // Afficher les favoris triés
+                    favorisAffiches.forEach(({ asin, key, productInfo, timeDiff }) => {
+                        const tr = document.createElement('tr');
+                        tr.className = 'vvp-orders-table--row';
+                        const urlProduct = "https://www.amazon.fr/dp/" + asin;
+                        if (productInfo == "ASIN absent") {
+                            tr.innerHTML = `
+                        <td class="vvp-orders-table--image-col"><img alt="${asin}" src="https://pickme.alwaysdata.net/img/Pas-d-image-disponible-svg.png"></td>
+                        <td class="vvp-orders-table--text-col"><a class="a-link-normal" target="_blank" rel="noopener" href="${urlProduct}">Recommandation ou produit inconnu : ${asin}</a></td>
+                        <td class="vvp-orders-table--text-col"><strong>N/A</strong></td>
+                        <td class="vvp-orders-table--actions-col"><span class="a-button a-button-primary vvp-orders-table--action-btn" style="margin-left: 10px; margin-right: 10px;"><span class="a-button-inner"><button data-key="${key}" class="a-button-input supprimerFavori" aria-labelledby="supprimer-${key}">Supprimer</button><span class="a-button-text" aria-hidden="true" id="supprimer-${key}">Supprimer</span></span></span></td>
+                    `;
+                        } else if (!productInfo.main_image && productInfo.title) {
+                            tr.innerHTML = `
+                        <td class="vvp-orders-table--image-col"><img alt="${asin}" src="https://pickme.alwaysdata.net/img/Pas-d-image-disponible-svg.png"></td>
+                        <td class="vvp-orders-table--text-col"><a class="a-link-normal" target="_blank" rel="noopener" href="${urlProduct}">Produit indisponible : ${productInfo.title}</a></td>
+                        <td class="vvp-orders-table--text-col"><strong>N/A</strong></td>
+                        <td class="vvp-orders-table--actions-col"><span class="a-button a-button-primary vvp-orders-table--action-btn" style="margin-left: 10px; margin-right: 10px;"><span class="a-button-inner"><button data-key="${key}" class="a-button-input supprimerFavori" aria-labelledby="supprimer-${key}">Supprimer</button><span class="a-button-text" aria-hidden="true" id="supprimer-${key}">Supprimer</span></span></span></td>
+                    `;
+                        } else if (productInfo.title) {
+                            // Vérifier la date et appliquer la couleur appropriée
+                            let dateColor = '';
+
+                            const hoursDiff = timeDiff / (1000 * 60 * 60);
+                            const minutesDiff = timeDiff / (1000 * 60);
+
+                            if (hoursDiff > 12) {
+                                dateColor = 'color: #FF0000;';
+                            } else if (minutesDiff < 1) {
+                                dateColor = 'color: #007FFF;';
+                            }
+                            tr.innerHTML = `
+                        <td class="vvp-orders-table--image-col"><img alt="${productInfo.title}" src="${productInfo.main_image}"></td>
+                        <td class="vvp-orders-table--text-col"><a class="a-link-normal" target="_blank" rel="noopener" href="${urlProduct}">${productInfo.title}</a></td>
+                        <td class="vvp-orders-table--text-col" style="${dateColor}"><strong>${productInfo.date_last_eu}</strong><br><a class="a-link-normal" target="_blank" rel="noopener" href="${productInfo.linkUrl}">${productInfo.linkText}</a></td>
+                        <td class="vvp-orders-table--actions-col"><span class="a-button a-button-primary vvp-orders-table--action-btn" style="margin-left: 10px; margin-right: 10px;"><span class="a-button-inner"><button data-key="${key}" class="a-button-input supprimerFavori" aria-labelledby="supprimer-${key}">Supprimer</button><span class="a-button-text" aria-hidden="true" id="supprimer-${key}">Supprimer</span></span></span></td>
+                    `;
+                        }
+                        favorisList.appendChild(tr);
+                    });
+                    ordersPostCmd(listASINS, "fav");
+                    // Ajouter des écouteurs d'événement pour les boutons de suppression
+                    document.querySelectorAll('.supprimerFavori').forEach(button => {
+                        button.addEventListener('click', function() {
+                            const key = this.getAttribute('data-key');
+                            localStorage.removeItem(key);
+                            const listItem = this.closest('tr');
+                            if (listItem) {
+                                listItem.remove(); //Supprimer la ligne correspondante
+                            }
+                            // Mettre à jour le titre avec le nombre de favoris affichés
+                            const nbFavorisRestants = document.querySelectorAll('#favorisList .vvp-orders-table--row').length;
+                            document.querySelector('#favorisCount').textContent = `Favoris (${nbFavorisRestants})`;
+                        });
+                    });
+                }
+
+                // Fonction pour supprimer tous les favoris
+                function supprimerTousLesFavoris() {
+                    if (confirm('Êtes-vous sûr de vouloir supprimer tous les favoris ?')) {
+                        Object.keys(localStorage).forEach(key => {
+                            if (key.endsWith('_f')) {
+                                localStorage.removeItem(key);
+                            }
+                        });
+                        afficherFavoris(); // Rafraîchir la liste des favoris
+                    }
+                }
+
+                // Ajouter le gestionnaire d'événement pour le bouton "Supprimer tous les favoris"
+                document.getElementById('supprimerTousFavoris').addEventListener('click', supprimerTousLesFavoris);
+
+                // Afficher le conteneur des favoris lors du clic sur le nouvel onglet
+                document.getElementById('favorisTab').addEventListener('click', function() {
+                    document.querySelectorAll('.a-tab-heading').forEach(tab => {
+                        tab.classList.remove('a-active');
+                    });
+                    this.parentElement.classList.add('a-tab-heading', 'a-active');
+                    this.setAttribute('aria-selected', 'true');
+                    document.querySelectorAll('.a-box-tab').forEach(box => {
+                        box.style.display = 'none';
+                    });
+                    container.style.display = 'block';
+                    afficherFavoris();
+                });
+            }
+        }
+
         if (apiOk && window.location.href.startsWith("https://www.amazon.fr/vine/vine-items?queue=")) {
             // Appeler la fonction pour afficher les commandes
             if (ordersStatsEnabled || statsEnabled) {
@@ -4225,28 +5360,23 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             const formData = new URLSearchParams({
                 version: version,
                 token: API_TOKEN,
-                urls: JSON.stringify(data),
+                products: JSON.stringify(data),
                 queue: valeurQueue,
                 page: valeurPage,
             });
 
-            return new Promise((resolve, reject) => {
-                GM_xmlhttpRequest({
-                    method: "POST",
-                    url: "https://pickme.alwaysdata.net/shyrka/products",
-                    data: formData.toString(),
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded"
-                    },
-                    onload: function(response) {
-                        //console.log(response.status, response.responseText);
-                        resolve(response);
-                    },
-                    onerror: function(error) {
-                        //console.error(error);
-                        reject(error);
-                    }
-                });
+            return fetch("https://pickme.alwaysdata.net/shyrka/newproducts", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: formData.toString()
+            })
+                .then(response => response.text().then(text => {
+                return {status: response.status, statusText: response.statusText, responseText: text};
+            }))
+                .catch(error => {
+                throw error;
             });
         }
 
@@ -4333,63 +5463,73 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                             asin: asin,
                         });
 
-                        GM_xmlhttpRequest({
+                        fetch("https://pickme.alwaysdata.net/shyrka/infocancel", {
                             method: "POST",
-                            url: "https://pickme.alwaysdata.net/shyrka/infocancel",
-                            data: formDataCancel.toString(),
                             headers: {
                                 "Content-Type": "application/x-www-form-urlencoded"
                             },
-                            onload: function(response) {
-                                if (response.status == 200) {
-                                    if (response.responseText == "true") {
-                                        cancelButton.textContent = 'Intégrer';
-                                        buttonDetails.style.background = '#dc3545';
-                                    } else {
-                                        cancelButton.textContent = 'Annuler';
-                                        buttonDetails.style.background = '#28a745';
-                                    }
-                                }
-                            },
-                            onerror: function(error) {
-                                console.error(error);
+                            body: formDataCancel.toString()
+                        })
+                            .then(response => {
+                            if (!response.ok) {
+                                throw new Error("Erreur réseau : " + response.status);
                             }
+                            return response.text();
+                        })
+                            .then(responseText => {
+                            if (responseText === "true") {
+                                cancelButton.textContent = 'Intégrer';
+                                buttonDetails.style.background = '#dc3545';
+                            } else {
+                                cancelButton.textContent = 'Annuler';
+                                buttonDetails.style.background = '#28a745';
+                            }
+                        })
+                            .catch(error => {
+                            console.error("Erreur lors de la requête :", error);
                         });
 
                         cancelButton.addEventListener('click', (event) => {
                             event.preventDefault();
                             const isCancelled = cancelButton.textContent.includes('Intégrer');
                             const newStatus = isCancelled ? 'uncancel' : 'cancel';
-                            GM_xmlhttpRequest({
+                            fetch("https://pickme.alwaysdata.net/shyrka/switchcancel", {
                                 method: "POST",
-                                url: "https://pickme.alwaysdata.net/shyrka/switchcancel",
-                                data: formDataCancel.toString(),
                                 headers: {
                                     "Content-Type": "application/x-www-form-urlencoded"
                                 },
-                                onload: function(response) {
-                                    const greenCircle = row.querySelector('span:nth-of-type(1)');
-                                    let greenCount = parseInt(greenCircle.textContent);
-                                    console.log(greenCount);
-                                    if (response.status == 200) {
-                                        if (isCancelled) {
-                                            cancelButton.textContent = 'Annuler';
-                                            buttonDetails.style.background = '#28a745';
-                                            if (ordersInfos && Number.isInteger(greenCount)) {
-                                                greenCircle.textContent = greenCount + 1;
-                                            }
-                                        } else {
-                                            cancelButton.textContent = 'Intégrer';
-                                            buttonDetails.style.background = '#dc3545';
-                                            if (ordersInfos && Number.isInteger(greenCount) && greenCount > 0) {
-                                                greenCircle.textContent = greenCount - 1;
-                                            }
-                                        }
-                                    }
-                                },
-                                onerror: function(error) {
-                                    console.error(error);
+                                body: formDataCancel.toString()
+                            })
+                                .then(response => {
+                                // On vérifie le statut de la réponse
+                                if (!response.ok) {
+                                    throw new Error(`Network response was not ok (status: ${response.status})`);
                                 }
+                                return response.text(); // ou response.json() si la réponse est au format JSON
+                            })
+                                .then(data => {
+                                const greenCircle = row.querySelector('span:nth-of-type(1)');
+                                let greenCount = parseInt(greenCircle.textContent);
+
+                                if (isCancelled) {
+                                    cancelButton.textContent = 'Annuler';
+                                    buttonDetails.style.background = '#28a745';
+                                    if (ordersInfos && Number.isInteger(greenCount)) {
+                                        greenCircle.textContent = greenCount + 1;
+                                    }
+                                } else {
+                                    cancelButton.textContent = 'Intégrer';
+                                    buttonDetails.style.background = '#dc3545';
+                                    if (ordersInfos && Number.isInteger(greenCount) && greenCount > 0) {
+                                        greenCircle.textContent = greenCount - 1;
+                                    }
+                                }
+
+                                // 'data' contient le contenu de la réponse (si besoin)
+                                // console.log(data);
+                            })
+                                .catch(error => {
+                                console.error(error);
                             });
                         });
 
@@ -4399,25 +5539,72 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                             actionCol.appendChild(buttonContainer);
                         }
 
-                        GM_xmlhttpRequest({
+                        fetch("https://pickme.alwaysdata.net/shyrka/orderlist", {
                             method: "POST",
-                            url: "https://pickme.alwaysdata.net/shyrka/orderlist",
-                            data: formData.toString(),
                             headers: {
                                 "Content-Type": "application/x-www-form-urlencoded"
                             },
+                            body: formData.toString()
+                        })
+                            .then(response => {
+                            if (!response.ok) {
+                                throw new Error("Erreur réseau " + response.status);
+                            }
+                            return response.text();
+                        })
+                            .then(data => {
+                            console.log("Réponse du serveur :", data);
+                        })
+                            .catch(error => {
+                            console.error("Erreur lors de la requête :", error);
                         });
                     }
                 });
 
-                if (ordersInfos) {
-                    ordersPostCmd(listASINS);
+                if (ordersInfos && ordersEnabled) {
+                    ordersPostCmd(listASINS, "orders");
+                    if (ordersPercent) {
+                        ordersPostPercent(listASINS);
+                    }
+                }
+            }
+        }
+
+        //Affiche les "boules" sur les avis
+        function reviewOrders() {
+            if (window.location.href.includes('vine-reviews')) {
+                const listASINS = [];
+                //Extraction des données de chaque ligne de produit
+                document.querySelectorAll('.vvp-reviews-table--row').forEach(row => {
+                    let productUrl = row.querySelector('.vvp-reviews-table--text-col a');
+                    let asin;
+                    if (productUrl) {
+                        productUrl = productUrl.href;
+                        asin = extractASIN(productUrl);
+                    } else {
+                        const asinElement = row.querySelector('.vvp-reviews-table--text-col');
+                        asin = asinElement ? asinElement.childNodes[0].nodeValue.trim() : null;
+                    }
+                    //On ajoute chaque asin à la liste pour appeler les infos de commandes
+                    listASINS.push("https://www.amazon.fr/dp/" + asin);
+                });
+                if (ordersInfos && ordersEnabled) {
+                    if (statsInReviews) {
+                        ordersPostCmd(listASINS, "reviews");
+                    }
+                    if (ordersPercent) {
+                        ordersPostPercent(listASINS);
+                    }
+
                 }
             }
         }
 
         if (ordersEnabled) {
             saveOrders();
+            if (ordersInfos) {
+                reviewOrders();
+            }
         }
 
         function ordersPost(data) {
@@ -4428,74 +5615,105 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                 queue: valeurQueue,
             });
 
-            return new Promise((resolve, reject) => {
-                GM_xmlhttpRequest({
-                    method: "POST",
-                    url: "https://pickme.alwaysdata.net/shyrka/asinsinfo",
-                    data: formData.toString(),
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded"
-                    },
-                    onload: function(response) {
-                        if (response.status == 200) {
-                            const productsData = JSON.parse(response.responseText);
-                            showOrders(productsData);
-                            resolve(productsData);
-                        } else {
-                            reject(`Error: ${response.status} ${response.statusText}`);
-                        }
-                    },
-                    onerror: function(error) {
-                        //console.error(error);
-                        reject(error);
-                    }
-                });
+            return fetch("https://pickme.alwaysdata.net/shyrka/asinsinfo", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: formData.toString()
+            })
+                .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.status} ${response.statusText}`);
+                }
+                return response.json();
+            })
+                .then(productsData => {
+                showOrders(productsData);
+                return productsData;
+            })
+                .catch(error => {
+                // console.error(error);
+                throw error;
             });
         }
 
-        function ordersPostCmd(data) {
+        function ordersPostCmd(data, tab = "orders") {
+            var apiURL = "https://pickme.alwaysdata.net/shyrka/asinsinfocmd";
+            if (tab === "fav") {
+                apiURL = "https://pickme.alwaysdata.net/shyrka/asinsinfofav";
+            }
+
             const formData = new URLSearchParams({
                 version: version,
                 token: API_TOKEN,
                 urls: JSON.stringify(data),
             });
 
-            return new Promise((resolve, reject) => {
-                GM_xmlhttpRequest({
-                    method: "POST",
-                    url: "https://pickme.alwaysdata.net/shyrka/asinsinfocmd",
-                    data: formData.toString(),
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded"
-                    },
-                    onload: function(response) {
-                        if (response.status == 200) {
-                            const productsData = JSON.parse(response.responseText);
-                            showOrdersCmd(productsData);
-                            resolve(productsData);
-                        } else {
-                            reject(`Error: ${response.status} ${response.statusText}`);
-                        }
-                    },
-                    onerror: function(error) {
-                        //console.error(error);
-                        reject(error);
-                    }
-                });
+            return fetch(apiURL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: formData.toString()
+            })
+                .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.status} ${response.statusText}`);
+                }
+                return response.json();
+            })
+                .then(productsData => {
+                showOrdersCmd(productsData, tab);
+                return productsData;
+            })
+                .catch(error => {
+                throw error; // vous pouvez logguer ou gérer l'erreur autrement si nécessaire
+            });
+
+        }
+
+        function ordersPostPercent(data) {
+            const formData = new URLSearchParams({
+                version: version,
+                token: API_TOKEN,
+                urls: JSON.stringify(data),
+            });
+
+            return fetch("https://pickme.alwaysdata.net/shyrka/asinsinfocmdpercent", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: formData.toString()
+            })
+                .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.status} ${response.statusText}`);
+                }
+                return response.json();
+            })
+                .then(productsData => {
+                showOrdersPercent(productsData);
+                return productsData;
+            })
+                .catch(error => {
+                throw error;
             });
         }
 
-        //Pour afficher les commandes et l'etv
+        //Pour afficher les commandes, l'etv, si c'est limité et les variations
         function showOrders(data) {
             const items = document.querySelectorAll('.vvp-item-tile');
             if (items.length === 0) return;
 
             items.forEach(item => {
+                //const imageElement = item.querySelector('img');
                 const asin = item.getAttribute('data-asin') || item.querySelector('.vvp-details-btn input').getAttribute('data-asin');
                 const url = "https://www.amazon.fr/dp/" + asin;
                 const orderData = data.find(d => d.url === url);
                 if (!orderData) return;
-
+                changeButtonProductPlus(item, orderData.limited, orderData.nb_variations);
                 item.style.position = 'relative';
 
                 const iconSources = {
@@ -4503,10 +5721,23 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                     error: "https://pickme.alwaysdata.net/img/ordererror.png"
                 };
 
-                const positions = mobileEnabled ? 'bottom: 50%;' : (cssEnabled ? 'bottom: 40%;' : 'bottom: 46%;');
+                // Imaginons que extendedEnabled soit une variable booléenne :
+                const positions = fastCmd && cssEnabled && !mobileEnabled
+                ? 'bottom: 47%;'
+                : fastCmd && !cssEnabled && !mobileEnabled
+                ? 'bottom: 50.2%;'
+                : (mobileEnabled && extendedEnabled)
+                ? 'bottom: 58.5%;' // <-- Valeur spécifique quand mobileEnabled && extendedEnabled
+                : mobileEnabled
+                ? (fastCmd ? 'bottom: 54%;' : 'bottom: 43.5%;')
+                : cssEnabled
+                ? (fastCmd ? 'bottom: 45%;' : 'bottom: 37.5%;')
+                : 'bottom: 45.4%;';
+
+
                 const iconSize = mobileEnabled || cssEnabled ? '21px' : '28px';
                 const fontSize = mobileEnabled || cssEnabled ? '12px' : '14px';
-                const sidePadding = mobileEnabled || cssEnabled ? '3px' : '8px';
+                const sidePadding = mobileEnabled || cssEnabled ? '3px' : '9px';
 
                 ['success', 'error'].forEach(type => {
                     const icon = document.createElement('img');
@@ -4532,17 +5763,20 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
         }
 
         //Pour afficher les commandes réussies ou non dans la liste des commandes
-        async function showOrdersCmd(data) {
-            const items = document.querySelectorAll('.vvp-orders-table--row');
+        async function showOrdersCmd(data, tab = "orders") {
+            if (tab == "fav") {
+                tab = "orders";
+            }
+            const items = document.querySelectorAll('.vvp-' + tab + '-table--row');
             if (items.length === 0) return;
 
             for (const item of items) {
-                const imageElement = item.querySelector('.vvp-orders-table--image-col img');
-                let productLink = item.querySelector('.vvp-orders-table--text-col a');
+                const imageElement = item.querySelector('.vvp-' + tab + '-table--image-col img');
+                let productLink = item.querySelector('.vvp-' + tab + '-table--text-col a');
                 let url;
 
                 if (!productLink) {
-                    const asinElement = item.querySelector('.vvp-orders-table--text-col');
+                    const asinElement = item.querySelector('.vvp-' + tab + '-table--text-col');
                     let asin = asinElement ? asinElement.childNodes[0].nodeValue.trim() : null;
                     const productInfo = await infoProduct(asin);
                     if (productInfo && productInfo.title) {
@@ -4563,9 +5797,10 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                     error: "https://pickme.alwaysdata.net/img/ordererror.png"
                 };
 
-                const positions = mobileEnabled ? 'bottom: 10%;' : 'bottom: 10%;';
-                const iconSize = mobileEnabled ? '28px' : '28px';
-                const fontSize = mobileEnabled ? '14px' : '14px';
+                const topValue = '70px';
+                const positions = `top: ${topValue};`;
+                const iconSize = '28px';
+                const fontSize = '14px';
                 const sidePadding = mobileEnabled ? '30%' : '8px';
 
                 ['success', 'error'].forEach(type => {
@@ -4584,6 +5819,59 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             }
         }
 
+        //Pour afficher les commandes réussies ou non dans la liste des commandes
+        async function showOrdersPercent(data) {
+            const items = document.querySelectorAll('.vvp-orders-table--row');
+            if (items.length === 0) return;
+
+            for (const item of items) {
+                const imageElement = item.querySelector('.vvp-orders-table--image-col img');
+                let productLink = item.querySelector('.vvp-orders-table--text-col a');
+                let url;
+
+                if (!productLink) {
+                    const asinElement = item.querySelector('.vvp-orders-table--text-col');
+                    let asin = asinElement ? asinElement.childNodes[0].nodeValue.trim() : null;
+                    url = "https://www.amazon.fr/dp/" + asin;
+                } else {
+                    url = productLink.href;
+                }
+
+                if (!imageElement || !url) continue;
+
+                const orderData = data.find(d => d.url === url);
+                if (!orderData) continue;
+
+                const positions = mobileEnabled ? 'bottom: 10%;' : 'bottom: 10%;';
+                const iconSize = mobileEnabled ? '28px' : '28px';
+                const fontSize = mobileEnabled ? '14px' : '14px';
+                const sidePadding = mobileEnabled ? '30%' : '8px';
+
+                if (orderData.percentage !== null) {
+                    const percent = document.createElement('span');
+                    percent.textContent = orderData.percentage;
+                    percent.style.cssText = `
+        position: absolute;
+        top: 5px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 2px 8px; /* Ajoute du padding pour le fond */
+        background-color: rgba(255, 255, 255, 0.7); /* Fond transparent blanc */
+        color: black;
+        width: auto; /* La largeur s'adapte au contenu */
+        height: auto; /* La hauteur s'adapte au contenu */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: ${fontSize};
+        z-index: 20;
+        border-radius: 4px; /* Arrondir légèrement les coins du fond */
+    `;
+                    imageElement.parentElement.style.position = 'relative';
+                    imageElement.parentElement.appendChild(percent);
+                }
+            }
+        }
 
         //Utilise les infos de RR pour avoir le nombre de commandes du jour
         function countOrdersToday() {
@@ -4630,47 +5918,45 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
         }
 
         //Appel API pour synchroniser
-        function syncProducts(askHide = true) {
+        function syncProducts(askHide = true, hideAll = false, refresh = true) {
             const formData = new URLSearchParams({
                 version: version,
                 token: API_TOKEN,
             });
 
-            return new Promise((resolve, reject) => {
-                GM_xmlhttpRequest({
-                    method: "POST",
-                    url: "https://pickme.alwaysdata.net/shyrka/sync",
-                    data: formData.toString(),
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded"
-                    },
-                    onload: function(response) {
-                        if (response.status >= 200 && response.status < 300) {
-                            try {
-                                // Tente de parser le texte de réponse en JSON
-                                const productsData = JSON.parse(response.responseText);
-                                syncProductsData(productsData, askHide);
-                                //console.log(jsonResponse); // Affiche la réponse parsée dans la console
-                                resolve(productsData);
-                            } catch (error) {
-                                console.error("Erreur lors du parsing JSON:", error);
-                                reject(error);
-                            }
-                        } else if (response.status == 401) {
-                            alert("Clef API invalide ou membre non Premium+");
-                            //console.log(response.status, response.responseText);
-                            resolve(response);
-                        } else {
-                            // Gérer les réponses HTTP autres que le succès (ex. 404, 500, etc.)
-                            console.error("Erreur HTTP:", response.status, response.statusText);
-                            reject(new Error(`Erreur HTTP: ${response.status} ${response.statusText}`));
-                        }
-                    },
-                    onerror: function(error) {
-                        console.error("Erreur de requête:", error);
-                        reject(error); // Rejette la promesse en cas d'erreur de requête
-                    }
+            return fetch("https://pickme.alwaysdata.net/shyrka/sync", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: formData.toString()
+            })
+                .then(response => {
+                if (response.status === 401) {
+                    alert("Clé API invalide ou membre non Premium+");
+                    return response;
+                }
+
+                if (!response.ok) {
+                    //Pour les autres statuts d'erreur
+                    console.error("Erreur HTTP:", response.status, response.statusText);
+                    throw new Error(`Erreur HTTP: ${response.status} ${response.statusText}`);
+                }
+
+                //On tente de parser la réponse en JSON
+                return response.json().catch(error => {
+                    console.error("Erreur lors du parsing JSON:", error);
+                    throw error;
                 });
+            })
+                .then(productsData => {
+                //Si on arrive ici, c'est qu'on a un code 2xx
+                syncProductsData(productsData, askHide, hideAll, refresh);
+                return productsData;
+            })
+                .catch(error => {
+                console.error("Erreur de requête:", error);
+                throw error;
             });
         }
 
@@ -4681,41 +5967,39 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                 token: API_TOKEN,
             });
 
-            return new Promise((resolve, reject) => {
-                GM_xmlhttpRequest({
-                    method: "POST",
-                    url: "https://pickme.alwaysdata.net/shyrka/qtyproducts", // Assurez-vous que l'URL est correcte
-                    data: formData.toString(),
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded"
-                    },
-                    onload: function(response) {
-                        if (response.status >= 200 && response.status < 300) {
-                            try {
-                                // Tente de parser le texte de réponse en JSON
-                                const productsData = JSON.parse(response.responseText); // Parsez le JSON de la réponse
-                                qtyProductsData(productsData); // Traitez les données
-                                //console.log(jsonResponse); // Affiche la réponse parsée dans la console
-                                resolve(productsData); // Résout la promesse avec l'objet JSON
-                            } catch (error) {
-                                console.error("Erreur lors du parsing JSON:", error);
-                                reject(error); // Rejette la promesse si le parsing échoue
-                            }
-                        } else if (response.status == 401) {
-                            //alert("Token invalide ou membre non Premium+");
-                            //console.log(response.status, response.responseText);
-                            resolve(response);
-                        } else {
-                            // Gérer les réponses HTTP autres que le succès (ex. 404, 500, etc.)
-                            console.error("Erreur HTTP:", response.status, response.statusText);
-                            reject(new Error(`Erreur HTTP: ${response.status} ${response.statusText}`));
-                        }
-                    },
-                    onerror: function(error) {
-                        console.error("Erreur de requête:", error);
-                        reject(error); // Rejette la promesse en cas d'erreur de requête
-                    }
+            return fetch("https://pickme.alwaysdata.net/shyrka/qtyproducts", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: formData.toString()
+            })
+                .then(response => {
+                if (response.status === 401) {
+                    return response;
+                }
+
+                if (!response.ok) {
+                    //Erreur HTTP (ex: 404, 500, etc.)
+                    console.error("Erreur HTTP:", response.status, response.statusText);
+                    throw new Error(`Erreur HTTP: ${response.status} ${response.statusText}`);
+                }
+
+                //Réponse 2xx, on essaie de parser le JSON
+                return response.json().catch(error => {
+                    console.error("Erreur lors du parsing JSON:", error);
+                    throw error;
                 });
+            })
+                .then(productsData => {
+                //On a réussi à parser le JSON, on appelle qtyProductsData
+                qtyProductsData(productsData);
+                return productsData;
+            })
+                .catch(error => {
+                //Erreur réseau ou de parsing déjà gérée ci-dessus
+                console.error("Erreur de requête:", error);
+                throw error;
             });
         }
 
@@ -4735,7 +6019,7 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
 
             // Ajoute les informations au div
             productsDiv.innerHTML = `
-        <p style="margin:0; font-weight: bold; text-decoration: underline;">Nouveaux produits :</p>
+        <p style="margin:0; font-weight: bold; text-decoration: underline;">Nouveaux produits</p>
         <p style="margin:0;">Autres articles : ${productsData[0].ai}${productsData[0].ai_recent !== '0' ? `<span style="color: green;"> (+${productsData[0].ai_recent})</span>` : ''}</p>
         <p style="margin:0;">Disponible pour tous : ${productsData[0].afa}${productsData[0].afa_recent !== '0' ? `<span style="color: green;"> (+${productsData[0].afa_recent})</span>` : ''}</p>
         <p style="margin:0;">Total jour : ${productsData[0].total}</p>
@@ -4750,41 +6034,39 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                 token: API_TOKEN,
             });
 
-            return new Promise((resolve, reject) => {
-                GM_xmlhttpRequest({
-                    method: "POST",
-                    url: "https://pickme.alwaysdata.net/shyrka/qtyorders", // Assurez-vous que l'URL est correcte
-                    data: formData.toString(),
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded"
-                    },
-                    onload: function(response) {
-                        if (response.status >= 200 && response.status < 300) {
-                            try {
-                                // Tente de parser le texte de réponse en JSON
-                                const ordersData = JSON.parse(response.responseText); // Parsez le JSON de la réponse
-                                qtyOrdersData(ordersData); // Traitez les données
-                                //console.log(jsonResponse); // Affiche la réponse parsée dans la console
-                                resolve(ordersData); // Résout la promesse avec l'objet JSON
-                            } catch (error) {
-                                console.error("Erreur lors du parsing JSON:", error);
-                                reject(error); // Rejette la promesse si le parsing échoue
-                            }
-                        } else if (response.status == 401) {
-                            //alert("Token invalide ou membre non Premium+");
-                            //console.log(response.status, response.responseText);
-                            resolve(response);
-                        } else {
-                            // Gérer les réponses HTTP autres que le succès (ex. 404, 500, etc.)
-                            console.error("Erreur HTTP:", response.status, response.statusText);
-                            reject(new Error(`Erreur HTTP: ${response.status} ${response.statusText}`));
-                        }
-                    },
-                    onerror: function(error) {
-                        console.error("Erreur de requête:", error);
-                        reject(error); // Rejette la promesse en cas d'erreur de requête
-                    }
+            return fetch("https://pickme.alwaysdata.net/shyrka/qtyorders", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: formData.toString()
+            })
+                .then(response => {
+                if (response.status === 401) {
+                    return response;
+                }
+
+                if (!response.ok) {
+                    //Erreur HTTP (ex: 404, 500, etc.)
+                    console.error("Erreur HTTP:", response.status, response.statusText);
+                    throw new Error(`Erreur HTTP: ${response.status} ${response.statusText}`);
+                }
+
+                //Réponse 2xx, on essaie de parser le JSON
+                return response.json().catch(error => {
+                    console.error("Erreur lors du parsing JSON:", error);
+                    throw error;
                 });
+            })
+                .then(ordersData => {
+                //On a réussi à parser le JSON, on appelle qtyOrdersData
+                qtyOrdersData(ordersData);
+                return ordersData;
+            })
+                .catch(error => {
+                //Erreur réseau ou de parsing déjà gérée ci-dessus
+                console.error("Erreur de requête:", error);
+                throw error;
             });
         }
 
@@ -4870,29 +6152,36 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
         }
 
         //Ajout des données reçu par l'API pour synchroniser
-        function syncProductsData(productsData, askHide = true) {
+        function syncProductsData(productsData, askHide = true, hideAll = false, refresh = true) {
             let userHideAll;
             if (askHide) {
-                userHideAll = confirm("Voulez-vous également cacher tous les produits ? OK pour activer, Annuler pour désactiver.");
+                userHideAll = confirm("Voulez-vous également cacher tous les produits ? OK pour oui, Annuler pour non.");
             } else {
-                userHideAll = true;
+                if (hideAll) {
+                    userHideAll = true;
+                } else {
+                    userHideAll = false;
+                }
             }
             let storedProducts = JSON.parse(GM_getValue("storedProducts", "{}"));
             productsData.forEach(product => {
                 const asin = product.asin;
                 const currentDate = product.date_ajout;
+                const enrollment = product.enrollment;
+                const hideKey = getAsinEnrollment(asin, enrollment);
                 if (userHideAll) {
-                    const etatFavoriKey = asin + '_favori';
-                    const etatFavori = JSON.parse(localStorage.getItem(etatFavoriKey)) || { estFavori: false };
-                    if (!etatFavori.estFavori) { // Ne modifie l'état de caché que si le produit n'est pas en favori
-                        const etatCacheKey = asin + '_cache';
-                        localStorage.setItem(etatCacheKey, JSON.stringify({ estCache: false }));
+                    const etatFavoriKey = asin + '_f';
+                    const etatFavori = localStorage.getItem(etatFavoriKey) || '0';
+                    if (etatFavori === '0') { //Ne modifie l'état de caché que si le produit n'est pas en favori
+                        const etatCacheKey = hideKey + '_c';
+                        localStorage.setItem(etatCacheKey, '1');
                     }
                 }
                 // Mettre à jour ou ajouter le produit dans storedProducts
                 storedProducts[asin] = {
-                    added: true, // Marquer le produit comme ajouté
-                    dateAdded: currentDate // Utilisez la date d'ajout fournie par l'API
+                    added: true, //Marquer le produit comme ajouté
+                    enrollmentKey: hideKey, //Key pour la fonction cacher
+                    dateAdded: currentDate //Utilisez la date d'ajout fournie par l'API
                 };
             });
 
@@ -4901,7 +6190,9 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             if (askHide) {
                 alert("Les produits ont été synchronisés.");
             }
-            window.location.reload();
+            if (refresh) {
+                window.location.reload();
+            }
         }
         //End
 
@@ -4917,20 +6208,20 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                 default:
                     return null;
             }
-
         }
 
-        let parentAsin, parentImage, queueType;
+        let parentAsin, parentImage, parentEnrollment, queueType;
 
-        // As much as I hate this, this adds event listeners to all of the "See details" buttons
+        //As much as I hate this, this adds event listeners to all of the "See details" buttons
         document.querySelectorAll('.a-button-primary.vvp-details-btn > .a-button-inner > input').forEach(function(element) {
             element.addEventListener('click', function() {
 
                 parentAsin = this.getAttribute('data-asin');
                 parentImage = this.parentElement.parentElement.parentElement.querySelector('img').src.match(PRODUCT_IMAGE_ID)[1];
+                parentEnrollment = getEnrollment(this);
                 queueType = urlData?.[2] || d_queueType(this.getAttribute('data-recommendation-type'));
 
-                // silencing console errors; a null error is inevitable with this arrangement; I might fix this in the future
+                //silencing console errors; a null error is inevitable with this arrangement; I might fix this in the future
                 try {
                     document.querySelector("button.a-button-discord").style.display = 'none'; // hiding the button until the modal content loads
                 } catch (error) {
@@ -5070,20 +6361,69 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                         const fullTextElement = tile.querySelector('.a-truncate-full.a-offscreen');
                         const cutTextElement = tile.querySelector('.a-truncate-cut');
                         if (fullTextElement && cutTextElement && fullTextElement.textContent) {
-                            cutTextElement.textContent = fullTextElement.textContent;
-                            // Appliquez les styles directement pour surmonter les restrictions CSS
-                            cutTextElement.style.cssText = 'height: auto !important; max-height: none !important; overflow: visible !important; white-space: normal !important;';
+                            if (!cssEnabled) {
+                                cutTextElement.textContent = fullTextElement.textContent;
+                                //Appliquez les styles directement pour surmonter les restrictions CSS
+                                cutTextElement.style.cssText = 'height: auto !important; max-height: none !important; overflow: visible !important; white-space: normal !important;';
+                            } else {
+                                document.addEventListener('mouseover', function(event) {
+                                    //Vérifie si la cible est dans le conteneur souhaité
+                                    const target = event.target.closest('.vvp-item-product-title-container');
+                                    if (target) {
+                                        const fullTextElement = target.querySelector('.a-truncate-full.a-offscreen');
+                                        if (fullTextElement) {
+                                            const fullText = fullTextElement.textContent;
+
+                                            //Crée le popup
+                                            const popup = document.createElement('div');
+                                            popup.textContent = fullText;
+                                            popup.style.position = 'fixed';
+                                            popup.style.maxWidth = '300px';
+                                            popup.style.wordWrap = 'break-word';
+                                            if (savedTheme == "dark") {
+                                                popup.style.backgroundColor = '#fff';
+                                                popup.style.color = 'rgba(0, 0, 0, 0.8)';
+                                            } else {
+                                                popup.style.backgroundColor = 'rgb(25, 25, 25)';
+                                                popup.style.color = '#fff';
+                                            }
+                                            popup.style.padding = '5px 10px';
+                                            popup.style.borderRadius = '5px';
+                                            popup.style.zIndex = '1000';
+                                            popup.style.pointerEvents = 'none';
+
+                                            //Positionne le popup près du curseur
+                                            document.body.appendChild(popup);
+                                            const movePopup = (e) => {
+                                                popup.style.top = `${e.clientY + 10}px`;
+                                                popup.style.left = `${e.clientX + 10}px`;
+                                            };
+                                            movePopup(event); //Place le popup initialement
+                                            document.addEventListener('mousemove', movePopup);
+
+                                            //Supprime le popup lorsque la souris quitte
+                                            const removePopup = () => {
+                                                popup.remove();
+                                                document.removeEventListener('mousemove', movePopup);
+                                                target.removeEventListener('mouseleave', removePopup);
+                                            };
+                                            target.addEventListener('mouseleave', removePopup);
+                                        }
+                                    }
+                                });
+                            }
                         }
                     });
                 } else {
                     setTimeout(tryExtended, 100);
                 }
 
-
-                // Appliquez des styles plus spécifiques pour surmonter les restrictions CSS
-                document.querySelectorAll('.vvp-item-tile .a-truncate').forEach(function(element) {
-                    element.style.cssText = 'max-height: 5.6em !important;';
-                });
+                if (!cssEnabled) {
+                    //Appliquez des styles plus spécifiques pour surmonter les restrictions CSS
+                    document.querySelectorAll('.vvp-item-tile .a-truncate').forEach(function(element) {
+                        element.style.cssText = 'max-height: 5.6em !important;';
+                    });
+                }
             }
             setTimeout(tryExtended, 600);
             //tryExtended();
@@ -5092,11 +6432,97 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
         //Wheel Fix
         if (apiOk) {
             if (wheelfixEnabled || ordersEnabled) {
+                const script = document.createElement('script');
+                script.textContent = `
+                function showMagicStars() {
+                    var style = document.createElement('style');
+                    style.innerHTML = \`
+            @keyframes sparkle {
+                0% { transform: scale(0); opacity: 1; }
+                100% { transform: scale(1); opacity: 0; }
+            }
+            .star {
+                position: fixed;
+                font-size: 60px; /* Plus grand */
+                animation: sparkle 3s forwards; /* Durée plus longue */
+                animation-timing-function: ease-out;
+                z-index: 999999; /* Très élevé */
+            }
+            .magic-text {
+                position: fixed;
+                top: 30%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                font-size: 40px;
+                color: #000099;
+           text-shadow:
+              -1px -1px 0 #000,
+               1px -1px 0 #000,
+              -1px  1px 0 #000,
+               1px  1px 0 #000; /* Contour noir */
+                z-index: 1000000; /* Encore plus élevé */
+                animation: fadeInOut 4s forwards; /* Animation pour le texte */
+            }
+            @keyframes fadeInOut {
+                0% { opacity: 0; }
+                10% { opacity: 1; }
+                90% { opacity: 1; }
+                100% { opacity: 0; }
+            }
+        \`;
+                    document.head.appendChild(style);
+
+                    var symbolColorPairs = [
+                        { symbol: '★', color: '#FFD700' },
+                        { symbol: '❆', color: '#07EEFD' },
+                        { symbol: '🐱', color: '#FFD700' },
+                        { symbol: '🔥', color: '#FFD700' },
+                        { symbol: '🦆', color: '#FFD700' },
+                        { symbol: '🐝', color: '#FFD700' },
+                        { symbol: '🐧', color: '#FFD700' },
+                        { symbol: '🥚', color: '#FFD700' },
+                        { symbol: '❤', color: '#FF69B4' }
+                    ];
+
+                    // Créer le texte "PickMe Fix"
+                    var magicText = document.createElement('div');
+                    magicText.className = 'magic-text';
+                    magicText.textContent = 'PickMe Fix';
+                    document.body.appendChild(magicText);
+
+                    // Supprimer le texte après 3 secondes
+                    setTimeout(() => {
+                        document.body.removeChild(magicText);
+                    }, 3000);
+                    let index = Math.floor(Math.random() * symbolColorPairs.length);
+                    let pair = symbolColorPairs[index];
+                    // Créer et afficher le symbole
+                    for (let i = 0; i < 50; i++) {
+                        let star = document.createElement('div');
+                        star.className = 'star';
+                        star.textContent = pair.symbol;
+                        star.style.color = pair.color;
+                        star.style.top = \`\${Math.random() * window.innerHeight}px\`;
+                        star.style.left = \`\${Math.random() * window.innerWidth}px\`;
+                        document.body.appendChild(star);
+
+                        // Supprimer l'étoile après l'animation
+                        setTimeout(() => {
+                            document.body.removeChild(star);
+                        }, 3000 + Math.random() * 500);
+                    }
+                }
+
+                const API_TOKEN = ${JSON.stringify(API_TOKEN)};
+                const version = ${JSON.stringify(version)};
+                const valeurQueue = ${JSON.stringify(valeurQueue)};
+                const ordersEnabled = ${JSON.stringify(ordersEnabled)};
+                const wheelfixEnabled = ${JSON.stringify(wheelfixEnabled)};
                 const origFetch = window.fetch;
                 var lastParentVariant = null;
                 var responseData = {};
                 var postData = {};
-                unsafeWindow.fetch = async (...args) => {
+                window.fetch = async (...args) => {
                     let response = await origFetch(...args);
                     let lastParent = lastParentVariant;
                     let regex = null;
@@ -5136,35 +6562,35 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                                     success: "failed",
                                     reason: responseData.error, //CROSS_BORDER_SHIPMENT, SCHEDULED_DELIVERY_REQUIRED, ITEM_NOT_IN_ENROLLMENT, ITEM_ALREADY_ORDERED
                                 });
-                                // Sélectionner tous les éléments avec la classe "a-alert-content"
+                                //Sélectionner tous les éléments avec la classe "a-alert-content"
                                 var alertContents = document.querySelectorAll('.a-alert-content');
 
-                                // Texte à ajouter en gras avec un retour à la ligne avant
-                                var texteAAjouter = "<br><strong> (PickMe) Code erreur  : " + responseData.error + "</strong>";
+                                //Texte à ajouter en gras avec un retour à la ligne avant
+                                var texteAAjouter = "<br><strong>(PickMe) Code erreur : " + responseData.error + "</strong> (<a href='https://pickme.alwaysdata.net/wiki/doku.php?id=plugins:pickme:codes_erreur' target='_blank'>wiki des codes d'erreurs</a>)";
 
-                                // Parcourir tous les éléments sélectionnés
+                                //Parcourir tous les éléments sélectionnés
                                 alertContents.forEach(function(alertContent) {
-                                    // Ajouter le texte après le contenu actuel
+                                    //Ajouter le texte après le contenu actuel
                                     alertContent.innerHTML += texteAAjouter;
                                 });
                             }
 
-                            GM_xmlhttpRequest({
+                            fetch("https://pickme.alwaysdata.net/shyrka/order", {
                                 method: "POST",
-                                url: "https://pickme.alwaysdata.net/shyrka/order",
-                                data: formData.toString(),
                                 headers: {
                                     "Content-Type": "application/x-www-form-urlencoded"
                                 },
+                                body: formData.toString()
                             });
 
-                            //Wait 500ms following an order to allow for the order report query to go through before the redirect happens.
+                            //Attendre 500ms après la commande pour laisser le temps au serveur de traiter avant la redirection.
                             await new Promise((r) => setTimeout(r, 500));
+
                             return response;
                         }
                     }
 
-                    regex = /^api\/recommendations\/.*$/;
+                    regex = new RegExp("^api/recommendations/.*$");
                     if (url.startsWith("api/recommendations")) {
                         try {
                             responseData = await response.clone().json();
@@ -5182,7 +6608,7 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                             //The item has variations and so is a parent, store it for later interceptions
                             lastParentVariant = result;
                         } else if (result.taxValue !== undefined) {
-                            // The item has an ETV value, let's find out if it's a child or a parent
+                            //The item has an ETV value, let's find out if it's a child or a parent
                             const isChild = !!lastParent?.variations?.some((v) => v.asin == result.asin);
                             var asinData = result.asin;
                             //On test si le produit a des variantes, on récupère le parent pour notre base de données
@@ -5191,26 +6617,190 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                                 let arrMatchesP = lastParent.recommendationId.match(regex);
                                 asinData = arrMatchesP[1];
                             }
+
+                            function returnVariations() {
+                                var variations = {};
+
+                                document.querySelectorAll('#vvp-product-details-modal--variations-container .vvp-variation-dropdown').forEach(function(elem) {
+
+                                    const type = elem.querySelector('h5').innerText;
+                                    const names = Array.from(elem.querySelectorAll('.a-dropdown-container select option')).map(function(option) {
+                                        return option.innerText.replace(/[*_~|\`]/g, '\\$&');
+                                    });
+                                    variations[type] = names;
+                                });
+                                return variations;
+                            }
+
+                            function nbVariations(obj) {
+                                let total = 1;
+                                for (const key in obj) {
+                                    if (Array.isArray(obj[key]) && obj[key].length > 0) {
+                                        total *= obj[key].length;
+                                    }
+                                }
+                                return total;
+                            }
+
+                            var variations = returnVariations();
+                            variations = (Object.keys(variations).length > 0) ? variations : null;
+
                             var formDataETV = new URLSearchParams({
                                 version: version,
                                 token: API_TOKEN,
                                 asin: asinData,
                                 etv: result.taxValue,
                                 queue: valeurQueue,
+                                limited: result.limitedQuantity,
+                                seller: result.byLineContributors[0],
+                                variations: JSON.stringify(variations),
+                                nb_variations: nbVariations(variations),
                             });
                             if (ordersEnabled) {
-                                GM_xmlhttpRequest({
+                                fetch("https://pickme.alwaysdata.net/shyrka/newetv", {
                                     method: "POST",
-                                    url: "https://pickme.alwaysdata.net/shyrka/etv",
-                                    data: formDataETV.toString(),
                                     headers: {
                                         "Content-Type": "application/x-www-form-urlencoded"
                                     },
+                                    body: formDataETV.toString()
                                 });
                             }
                         }
                         if (wheelfixEnabled) {
                             let fixed = 0;
+                            //Fix automatique du fix qu'on peut faire à la main
+                            /*let timeoutId = setTimeout(function() {
+                                var spinner = document.querySelector('.a-spinner.a-spinner-medium');
+                                if (spinner) {
+                                    let parent = spinner.parentNode;
+                                    spinner.remove();
+
+                                    var modalWrapper = document.getElementById('vvp-product-details-modal--spinner');
+
+                                    var container = document.createElement('div');
+                                    container.style.textAlign = 'center';
+                                    modalWrapper.appendChild(container);
+
+                                    // Créer le texte du titre
+                                    var title = document.createElement('p');
+                                    title.textContent = 'PickMe Fix';
+                                    title.style.fontSize = '24px';
+                                    title.style.fontWeight = 'bold';
+                                    title.style.marginBottom = '10px';
+                                    title.style.textAlign = 'center';
+                                    title.style.fontFamily = 'Arial, sans-serif';
+                                    container.appendChild(title);
+
+                                    // Créer le texte explicatif sous le titre
+                                    var explanationText = document.createElement('p');
+                                    explanationText.textContent = "Pour corriger ce produit, il faut choisir la variation souhaitée et cliquer sur le bouton 'Corriger ce produit'. Il suffit ensuite d'ouvrir à nouveau les détails du produit pour le commander.";
+                                    explanationText.style.fontSize = '14px';
+                                    explanationText.style.marginBottom = '20px';
+                                    explanationText.style.textAlign = 'center';
+                                    explanationText.style.lineHeight = '1.5';
+                                    container.appendChild(explanationText);
+
+                                    // Créer la liste déroulante
+                                    var select = document.createElement('select');
+                                    select.style.marginBottom = '15px';
+                                    container.appendChild(select);
+
+                                    // Parcourir les variations pour les ajouter à la liste
+                                    result.variations.forEach(function(variation) {
+                                        var option = document.createElement('option');
+                                        option.value = variation.asin;
+                                        option.textContent = Object.values(variation.dimensions).join(', ');
+                                        select.appendChild(option);
+                                    });
+
+                                    // Créer le bouton sous la liste
+                                    var buttonWrapper = document.createElement('span');
+                                    buttonWrapper.className = "a-declarative";
+                                    buttonWrapper.setAttribute("data-action", "vvp-hide-modal");
+                                    buttonWrapper.setAttribute("data-csa-c-type", "widget");
+                                    buttonWrapper.setAttribute("data-csa-c-func-deps", "aui-da-vvp-hide-modal");
+                                    buttonWrapper.setAttribute("data-vvp-hide-modal", "{}");
+
+                                    var button = document.createElement('span');
+                                    button.className = "a-button a-button-primary";
+
+                                    var buttonInner = document.createElement('span');
+                                    buttonInner.className = "a-button-inner";
+
+                                    var buttonInput = document.createElement('input');
+                                    buttonInput.className = "a-button-input";
+                                    buttonInput.type = "submit";
+                                    buttonInput.setAttribute("aria-labelledby", "vvp-product-details-modal--back-btn-announce");
+
+                                    var buttonText = document.createElement('span');
+                                    buttonText.className = "a-button-text";
+                                    buttonText.id = "vvp-product-details-modal--back-btn-announce";
+                                    buttonText.textContent = "Corriger ce produit";
+
+                                    // Assembler le bouton
+                                    buttonInner.appendChild(buttonInput);
+                                    buttonInner.appendChild(buttonText);
+                                    button.appendChild(buttonInner);
+                                    buttonWrapper.appendChild(button);
+
+                                    // Ajouter un retour à la ligne pour le bouton
+                                    var br = document.createElement('br');
+                                    container.appendChild(br);
+
+                                    container.appendChild(buttonWrapper);
+
+                                    // Sélectionner les boutons
+                                    const backButton = document.querySelector('#vvp-product-details-modal--back-btn');
+                                    const closeButton = document.querySelector('button.a-button-close');
+
+                                    // Fonction qui supprime le contenu de modalWrapper
+                                    function clearModalContent() {
+                                        // Supprimer tout ce qu'on a ajouté comme texte ou menu déroulant
+                                        while (modalWrapper.firstChild) {
+                                            modalWrapper.removeChild(modalWrapper.firstChild);
+                                        }
+
+                                        // Supprimer les écouteurs pour éviter que cela ne se refasse
+                                        backButton.removeEventListener('click', clearModalContent);
+                                        closeButton.removeEventListener('click', clearModalContent);
+                                        parent.appendChild(spinner);
+                                        // Annuler le timer en cours
+                                        clearTimeout(timeoutId);
+                                    }
+
+                                    // Ajouter un écouteur d'événement sur les deux boutons
+                                    backButton.addEventListener('click', clearModalContent);
+                                    closeButton.addEventListener('click', clearModalContent);
+
+                                    // Ajouter l'événement de clic au bouton
+                                    buttonInput.addEventListener('click', function() {
+                                        showMagicStars();
+                                        var recommendationId = result.recommendationId;
+                                        var selectedAsin = select.value;
+                                        var recommendationInputs = document.querySelectorAll('input[data-recommendation-id]');
+                                        recommendationInputs.forEach(function(input) {
+                                            if (input.getAttribute('data-recommendation-id') === recommendationId) {
+                                                input.setAttribute('data-asin', selectedAsin);
+                                                input.setAttribute('data-is-parent-asin', 'false');
+                                                input.setAttribute('data-recommendation-id', recommendationId);
+                                            }
+                                        });
+
+                                        // Supprimer tout ce qu'on a ajouté comme texte ou menu déroulant
+                                        while (modalWrapper.firstChild) {
+                                            modalWrapper.removeChild(modalWrapper.firstChild);
+                                        }
+
+                                        // Simuler le clic sur le bouton "Retour" pour fermer le modal
+                                        var returnButton = document.querySelector('[data-action="vvp-hide-modal"]');
+                                        if (returnButton) {
+                                            returnButton.click();
+                                        }
+                                        parent.appendChild(spinner);
+                                    });
+                                }
+                            }, 3000); // 3000 millisecondes = 3 secondes*/
+
                             result.variations = result.variations?.map((variation) => {
                                 if (Object.keys(variation.dimensions || {}).length === 0) {
                                     variation.dimensions = {
@@ -5221,17 +6811,27 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                                 }
 
                                 for (const key in variation.dimensions) {
-                                    // Échapper les caractères spéciaux
-                                    variation.dimensions[key] = variation.dimensions[key]
-                                        .replace(/&/g, "&amp;")
-                                        .replace(/</g, "&lt;")
-                                        .replace(/>/g, "&gt;")
-                                        .replace(/"/g, "&quot;")
-                                        .replace(/'/g, "&#039;");
+                                    // Sauvegarder la valeur d'origine
+                                    let originalValue = variation.dimensions[key]; //
 
-                                    // Ajout de VH{fixed} si le dernier caractère n'est pas alphanumérique
-                                    if (!variation.dimensions[key].match(/[a-z0-9]$/i)) {
-                                        //variation.dimensions[key] = variation.dimensions[key] + ` VH${fixed}`;
+                                    //Échapper les caractères spéciaux
+                                    variation.dimensions[key] = variation.dimensions[key]
+                                        .replace(new RegExp("&", "g"), "&amp;")
+                                        .replace(new RegExp("<", "g"), "&lt;")
+                                        .replace(new RegExp(">", "g"), "&gt;")
+                                        .replace(new RegExp('"', "g"), "&quot;")
+                                        .replace(new RegExp("'", "g"), "&#039;")
+                                        .replace(new RegExp("°", "g"), "&#176;")
+                                        .replace(new RegExp("\\\\(", "g"), "|")
+                                         .replace(new RegExp("\\\\)", "g"), "|")
+                                        .replace(new RegExp(",", "g"), "");
+
+                                    //Si la valeur a changé, on incrémente fixed
+                                    if (originalValue !== variation.dimensions[key]) {
+                                        fixed++;
+                                    }
+
+                                    if (!variation.dimensions[key].match(/[a-zà-ÿ0-9]$/i)) {
                                         variation.dimensions[key] = variation.dimensions[key];
                                         fixed++;
                                     }
@@ -5254,86 +6854,9 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                         }
                     }
                     return response;
-                };
-            }
-
-            function showMagicStars() {
-                var style = document.createElement('style');
-                style.innerHTML = `
-            @keyframes sparkle {
-                0% { transform: scale(0); opacity: 1; }
-                100% { transform: scale(1); opacity: 0; }
-            }
-            .star {
-                position: fixed;
-                font-size: 60px; /* Plus grand */
-                animation: sparkle 3s forwards; /* Durée plus longue */
-                animation-timing-function: ease-out;
-                z-index: 999999; /* Très élevé */
-            }
-            .magic-text {
-                position: fixed;
-                top: 30%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                font-size: 40px;
-                color: #000099;
-           text-shadow:
-              -1px -1px 0 #000,
-               1px -1px 0 #000,
-              -1px  1px 0 #000,
-               1px  1px 0 #000; /* Contour noir */
-                z-index: 1000000; /* Encore plus élevé */
-                animation: fadeInOut 4s forwards; /* Animation pour le texte */
-            }
-            @keyframes fadeInOut {
-                0% { opacity: 0; }
-                10% { opacity: 1; }
-                90% { opacity: 1; }
-                100% { opacity: 0; }
-            }
-        `;
-                document.head.appendChild(style);
-
-                var symbolColorPairs = [
-                    { symbol: '★', color: '#FFD700' },
-                    { symbol: '❆', color: '#07EEFD' },
-                    { symbol: '🐱', color: '#FFD700' },
-                    { symbol: '🔥', color: '#FFD700' },
-                    { symbol: '🦆', color: '#FFD700' },
-                    { symbol: '🐝', color: '#FFD700' },
-                    { symbol: '🐧', color: '#FFD700' },
-                    { symbol: '🥚', color: '#FFD700' },
-                    { symbol: '❤', color: '#FF69B4' }
-                ];
-
-                // Créer le texte "PickMe Fix"
-                var magicText = document.createElement('div');
-                magicText.className = 'magic-text';
-                magicText.textContent = 'PickMe Fix';
-                document.body.appendChild(magicText);
-
-                // Supprimer le texte après 3 secondes
-                setTimeout(() => {
-                    document.body.removeChild(magicText);
-                }, 3000);
-                let index = Math.floor(Math.random() * symbolColorPairs.length);
-                let pair = symbolColorPairs[index];
-                // Créer et afficher le symbole
-                for (let i = 0; i < 50; i++) {
-                    let star = document.createElement('div');
-                    star.className = 'star';
-                    star.textContent = pair.symbol;
-                    star.style.color = pair.color;
-                    star.style.top = `${Math.random() * window.innerHeight}px`;
-                    star.style.left = `${Math.random() * window.innerWidth}px`;
-                    document.body.appendChild(star);
-
-                    // Supprimer l'étoile après l'animation
-                    setTimeout(() => {
-                        document.body.removeChild(star);
-                    }, 3000 + Math.random() * 500);
-                }
+                };`;
+                document.documentElement.appendChild(script);
+                script.remove();
             }
 
             function isObjectEmpty(obj) {
@@ -5348,141 +6871,252 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
         //End Wheel Fix
 
         //Sauvegarder/Restaurer
-        // Fonction pour récupérer les données de localStorage
+        //Fonction pour récupérer les données de localStorage
         function getLocalStorageData() {
             let data = {};
             for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
-                if (key.endsWith('_cache') || key.endsWith('_favori')) {
+                if (key.endsWith('_c') || key.endsWith('_f')) {
                     data[key] = localStorage.getItem(key);
                 }
             }
             return data;
         }
 
-        // Fonction pour restaurer les données dans localStorage
+        //Fonction pour restaurer les données dans localStorage
         function setLocalStorageData(data) {
             for (let key in data) {
-                if (key.endsWith('_cache') || key.endsWith('_favori')) {
+                if (key.endsWith('_c') || key.endsWith('_f')) {
                     localStorage.setItem(key, data[key]);
                 }
             }
         }
 
-        function saveData() {
-            // Récupérez toutes les clés sauvegardées
-            const keys = GM_listValues();
-            let data = {};
-            //On exclu les paramètres propres a un appareil, pour éviter d'avoir l'affichage mobile sur PC par exemple
-            const excludedKeys = ['mobileEnabled', 'cssEnabled', 'fastCmdEnabled', 'extendedEnabled', 'onMobile', 'ordersEnabled', 'ordersStatsEnabled', 'ordersInfos'];
-            keys.forEach(key => {
-                if (!excludedKeys.includes(key)) {
-                    data[key] = GM_getValue(key);
-                } else {
-                    console.log(key);
-                }
-            });
+        async function saveData() {
+            try {
+                // Récupérez toutes les clés sauvegardées
+                const keys = GM_listValues();
+                let data = {};
 
-            // Ajouter les données de localStorage
-            const localStorageData = getLocalStorageData();
-            data = { ...data, ...localStorageData };
+                // Exclure les paramètres propres à un appareil
+                const excludedKeys = [
+                    'mobileEnabled', 'cssEnabled', 'fastCmdEnabled', 'onMobile',
+                    'ordersEnabled', 'ordersStatsEnabled', 'ordersInfos',
+                    'lastVisit', 'hideBas'
+                ];
 
-            const formData = {
-                version: version,
-                token: API_TOKEN,
-                settings: data,
-            };
-            GM_xmlhttpRequest({
-                method: "POST",
-                url: "https://pickme.alwaysdata.net/shyrka/save",
-                data: JSON.stringify(formData),
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                onload: function(response) {
-                    console.log("Sauvegarde réussie");
-                    const responseData = JSON.parse(response.responseText);
-                    if (responseData.lastSaveDate) {
-                        const restoreButton = document.getElementById('restoreData');
-                        restoreButton.textContent = `(Premium) Restaurer les paramètres/produits (${convertToEuropeanDate(responseData.lastSaveDate)})`;
+                keys.forEach(key => {
+                    if (!excludedKeys.includes(key)) {
+                        data[key] = GM_getValue(key);
                     } else {
-                        console.error("La date de la dernière sauvegarde n'a pas été retournée.");
+                        console.log(`Exclusion de la clé : ${key}`);
                     }
-                },
-                onerror: function(error) {
-                    console.error("Erreur lors de la sauvegarde :", error);
-                }
-            });
-        }
+                });
 
-        function restoreData() {
-            const formData = new URLSearchParams({
-                version: version,
-                token: API_TOKEN,
-            });
-            GM_xmlhttpRequest({
-                method: "POST",
-                url: "https://pickme.alwaysdata.net/shyrka/restore",
-                data: formData.toString(),
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded"
-                },
-                onload: function(response) {
-                    let data = JSON.parse(response.responseText);
-                    for (let key in data) {
-                        if (key.endsWith('_cache') || key.endsWith('_favori')) {
-                            localStorage.setItem(key, data[key]);
-                        } else {
-                            GM_setValue(key, data[key]);
-                        }
-                    }
-                    console.log("Restauration réussie");
-                    alert("Restauration réussie");
-                    window.location.reload();
-                },
-                onerror: function(error) {
-                    console.error("Erreur lors de la restauration :", error);
-                }
-            });
-        }
+                // Ajouter les données de localStorage
+                const localStorageData = getLocalStorageData();
+                data = { ...data, ...localStorageData };
 
-        async function lastSave() {
-            const formData = new URLSearchParams({
-                version: version,
-                token: API_TOKEN,
-            });
+                // Préparation des données pour l'envoi
+                const formData = {
+                    version: version,
+                    token: API_TOKEN,
+                    settings: data,
+                };
 
-            return new Promise((resolve, reject) => {
-                GM_xmlhttpRequest({
+                // Effectuer la requête fetch
+                const response = await fetch("https://pickme.alwaysdata.net/shyrka/save", {
                     method: "POST",
-                    url: "https://pickme.alwaysdata.net/shyrka/lastsave",
-                    data: formData.toString(),
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                // Vérifier la réponse
+                if (!response.ok) {
+                    throw new Error(`Erreur lors de la sauvegarde : ${response.status} ${response.statusText}`);
+                }
+
+                const responseData = await response.json();
+                console.log("Sauvegarde réussie");
+
+                // Gérer les données de réponse
+                if (responseData.lastSaveDate) {
+                    const restoreButton = document.getElementById('restoreData');
+                    restoreButton.textContent = `(Premium) Restaurer les paramètres/produits (${convertToEuropeanDate(responseData.lastSaveDate)})`;
+                    restoreButton.removeAttribute('disabled');
+                } else {
+                    console.error("La date de la dernière sauvegarde n'a pas été retournée.");
+                }
+            } catch (error) {
+                console.error("Erreur lors de la sauvegarde :", error);
+            }
+        }
+
+        async function restoreData() {
+            try {
+                const formData = new URLSearchParams({
+                    version: version,
+                    token: API_TOKEN,
+                });
+
+                const response = await fetch("https://pickme.alwaysdata.net/shyrka/restore", {
+                    method: "POST",
                     headers: {
                         "Content-Type": "application/x-www-form-urlencoded"
                     },
-                    onload: function(response) {
-                        if (response && response.status === 200) {
-                            const data = JSON.parse(response.responseText);
-                            const europeanDate = convertToEuropeanDate(data.lastSaveDate);
-                            resolve(europeanDate);
-                        } else if (response && response.status === 201) {
-                            resolve("Aucune sauvegarde");
-                        } else {
-                            reject("Erreur lors de la récupération de la dernière sauvegarde");
-                        }
-                    },
-                    onerror: function(error) {
-                        reject("Erreur lors de la récupération de la dernière sauvegarde : " + error);
-                    }
+                    body: formData.toString()
                 });
-            });
+
+                if (!response.ok) {
+                    throw new Error(`Erreur lors de la restauration : ${response.status} ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                const restoreSettings = confirm("Souhaitez-vous restaurer les paramètres ? (certains paramètres incompatibles entre eux ne sont pas pris en charge par cette fonction)");
+                const restoreProducts = confirm("Souhaitez-vous restaurer les produits (surbrillance + visibilité cachée/visible) ?");
+
+                for (const key in data) {
+                    if (key.endsWith('_c') || key.endsWith('_f')) {
+                        if (restoreProducts) {
+                            localStorage.setItem(key, data[key]);
+                        }
+                    } else {
+                        if (restoreSettings) {
+                            GM_setValue(key, data[key]);
+                        }
+                    }
+                }
+
+                if (restoreSettings || restoreProducts) {
+                    console.log("Restauration réussie");
+                    alert("Restauration réussie");
+                    window.location.reload();
+                } else {
+                    console.log("Restauration annulée");
+                    alert("Restauration annulée");
+                }
+            } catch (error) {
+                console.error("Erreur lors de la restauration :", error);
+            }
+        }
+
+        async function lastSave() {
+            try {
+                const formData = new URLSearchParams({
+                    version: version,
+                    token: API_TOKEN,
+                });
+
+                const response = await fetch("https://pickme.alwaysdata.net/shyrka/lastsave", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    body: formData.toString()
+                });
+
+                if (response.status === 200) {
+                    const data = await response.json();
+                    const europeanDate = convertToEuropeanDate(data.lastSaveDate);
+                    return europeanDate;
+                } else if (response.status === 201) {
+                    return "Aucune sauvegarde";
+                } else {
+                    throw new Error("Erreur lors de la récupération de la dernière sauvegarde");
+                }
+            } catch (error) {
+                throw new Error("Erreur lors de la récupération de la dernière sauvegarde : " + error);
+            }
         }
         //End sauvegarde
+
+        //Reload pour reco horaire
+        function reloadAtNextFullHour() {
+
+            const getRandomInteger = (min, max) => {
+                min = Math.ceil(min)
+                max = Math.floor(max)
+
+                return Math.floor(Math.random() * (max - min)) + min
+            }
+
+            const now = new Date();
+
+            // Calculer combien de temps il reste jusqu'à la prochaine heure ronde
+            const nextHour = new Date();
+            nextHour.setHours(now.getHours() + 1);
+            nextHour.setMinutes(0);
+            var randomSec = getRandomInteger(3,8);
+            nextHour.setSeconds(randomSec);
+            nextHour.setMilliseconds(0);
+
+            const timeUntilNextHour = nextHour - now;
+
+            // Créer l'élément pour afficher le décompte
+            const countdownDiv = document.createElement('div');
+            countdownDiv.style.position = 'fixed';
+            if (headerEnabled) {
+                countdownDiv.style.top = '10px';
+            } else {
+                countdownDiv.style.top = '140px';
+            }
+            countdownDiv.style.left = '50%';
+            countdownDiv.style.transform = 'translateX(-50%)';
+            countdownDiv.style.backgroundColor = 'rgba(0, 0, 0, 1)';
+            countdownDiv.style.color = 'white';
+            countdownDiv.style.padding = '10px';
+            countdownDiv.style.borderRadius = '5px';
+            countdownDiv.style.zIndex = '9999'; // S'assurer qu'il est au-dessus
+            document.body.appendChild(countdownDiv);
+
+            // Fonction pour mettre à jour le décompte
+            function updateCountdown() {
+                const now = new Date();
+                const timeLeft = nextHour - now;
+                if (timeLeft <= 0) {
+                    countdownDiv.textContent = 'Actualisation...';
+                    clearInterval(countdownInterval);
+                } else {
+                    const minutes = Math.floor((timeLeft / 1000 / 60) % 60);
+                    const seconds = Math.floor((timeLeft / 1000) % 60);
+                    countdownDiv.textContent = `Prochaine actualisation : ${minutes} min. ${seconds} sec.`;
+                }
+            }
+
+            // Mettre à jour le décompte toutes les secondes
+            const countdownInterval = setInterval(updateCountdown, 1000);
+
+            // Mise à jour initiale
+            updateCountdown();
+
+            // Définir un timeout pour recharger la page à l'heure pleine
+            setTimeout(function() {
+                location.reload(); // recharge la page
+            }, timeUntilNextHour);
+        }
+
+        // Appeler la fonction immédiatement au chargement de la page
+        if (recoHReload && valeurQueue == "potluck" && apiOk) {
+            reloadAtNextFullHour();
+        }
 
         if (autohideEnabled) {
             setTimeout(displayContent, 600);
         } else {
             displayContent();
         }
-    });
+    }
+
+    //Fix iPhone
+    if (document.readyState !== 'loading') {
+        runPickMe();
+    }
+    else {
+        document.addEventListener('DOMContentLoaded', function () {
+            runPickMe();
+        });
+    }
 })();
