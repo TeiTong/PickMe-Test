@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PickMe
 // @namespace    http://tampermonkey.net/
-// @version      1.14
+// @version      1.14.1
 // @description  Outils pour les membres du discord AVFR
 // @author       Code : MegaMan, testeurs : Louise et Ashemka (avec également du code de lelouch_di_britannia, FMaz008 et Thorvarium)
 // @match        https://www.amazon.fr/vine/vine-items
