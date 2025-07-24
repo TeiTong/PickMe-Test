@@ -11125,8 +11125,7 @@ ${isPlus && apiOk ? `
 
             //Pour savoir si l'utilisateur est sur iOS
             function isIOS() {
-                return true;
-                //return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+                return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
             }
 
             function insertButton() {
