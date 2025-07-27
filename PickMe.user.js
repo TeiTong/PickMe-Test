@@ -3830,32 +3830,29 @@ body {
                     var mobileCssRR = document.createElement('style');
 
                     mobileCssRR.textContent = `
-/*Centrer le bouton des catégories*/
-#categories-sheet {
-    margin-right: 8px !important;
-    margin-left: -8px !important;
+#configPopupRR, #emailConfigPopup {
+  width: 350px !important;
+  height: 600px;
 }
 
-.vvp-items-button-scroll-container {
-    overflow: visible !important;
+#colorPickerPopup {
+  width: 350px !important;
 }
 
-/*Pour gérer Avis/Commandes/Compte*/
-#vvp-header {
-  display: flex !important;
-  align-items: center; !important;
-  justify-content: flex-start !important;
-  font-weight: bold !important;
+/* Taille dynamique pour mobile */
+@media (max-width: 600px) {
+  #configPopupRR {
+    width: 90%; /* Prendre 90% de la largeur de l'écran */
+    height: 90%;
+    margin: 10px auto; /* Ajout d'un peu de marge autour des popups */
+  }
 }
 
-#vvp-header a.a-link-normal {
-  position: relative;
-  padding: 0 0.15em;
-  text-decoration: none;
-}
-
-#vvp-header a.a-link-normal:last-of-type::after {
-  content: "";
+@media (max-width: 600px) {
+  #colorPickerPopup, #emailConfigPopup {
+    width: 90%; /* Prendre 90% de la largeur de l'écran */
+    margin: 10px auto; /* Ajout d'un peu de marge autour des popups */
+  }
 }
 
 /* Fix CSS du 12/05/25 */
@@ -3878,12 +3875,12 @@ body {
 
 /* Taille de police pour le texte gris de la page du compte */
 .grey-text {
-    font-size: 12px;
+  font-size: 12px;
 }
 
 /* Taille des fonds gris sur le compte */
 #vvp-current-status-box {
-    height: 200px !important;
+  height: 200px !important;
 }
 
 .vvp-body {
@@ -3891,37 +3888,37 @@ body {
 }
 
 #vvp-vine-activity-metrics-box {
-    height: 320px !important;
+  height: 320px !important;
 }
 
 .a-button-text {
-    /* Si nécessaire, ajustez aussi le padding pour .a-button-text */
-    padding: 2px; /* Ajustement du padding pour le texte du bouton */
+  /* Si nécessaire, ajustez aussi le padding pour .a-button-text */
+  padding: 2px; /* Ajustement du padding pour le texte du bouton */
 }
 
 /* Modification du bouton du rapport */
 .a-button-dropdown {
-    width: auto;
-    max-width: 300px;
+  width: auto;
+  max-width: 300px;
 }
 
 .a-button-inner {
-    padding: 5px 10px;
+  padding: 5px 10px;
 }
 
 .a-dropdown-prompt {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* On retire le texte de l'écran compte */
 #vvp-gold-status-perks-display * {
-    visibility: hidden;
+  visibility: hidden;
 }
 
 .a-column.a-span6.a-span-last #vvp-you-are-awesome-display {
-    visibility: hidden;
+  visibility: hidden;
 }
 
 body {
@@ -3968,11 +3965,6 @@ body {
   .vvp-tab-content
   .vvp-items-button-and-search-container {
   margin: 0px !important;
-}
-
-/* Pour rabaisser le logo en mobile */
-#vvp-logo-link img {
-    margin-top: 10px;
 }
 
 #a-page
@@ -4030,19 +4022,20 @@ body {
 
 ul.a-pagination li:first-child a,  /* Cible le premier li de la liste, supposant que c'est Précédent */
 li:last-child.a-last a {     /* Cible les li avec classe 'a-last', supposant que c'est Suivant */
-    font-size: 0;
+  font-size: 0;
 }
 
 li:first-child a span.larr,  /* Cible le span larr dans le premier li */
 li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
-    font-size: 16px;
-    visibility: visible;
+  font-size: 16px;
+  visibility: visible;
 }
 
 .a-pagination li {
   width: 40px !important;
   height: 40px !important;
 }
+
 .a-pagination li a {
   padding: 0px !important;
   margin: 0px !important;
@@ -4050,12 +4043,14 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
   line-height: 40px !important;
 }
 
-.vvp-details-btn, .vvp-details-btn-mobile {
+.vvp-details-btn,
+.vvp-details-btn-mobile {
   padding: 0.25rem 0 !important;
   margin: 0.25rem 0rem !important;
 }
 
-.vvp-details-btn .a-button-text, .vvp-details-btn-mobile .a-button-text {
+.vvp-details-btn .a-button-text,
+.vvp-details-btn-mobile .a-button-text {
   padding: 0.5px 0.25px !important;
 }
 
@@ -4113,6 +4108,58 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
   width: 100% !important;
   display: flex !important;
   align-items: center !important;
+}
+
+#vvp-items-grid,
+#tab-unavailable,
+#tab-hidden,
+#tab-favourite {
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(var(--grid-column-width), auto)
+  ) !important;
+}
+
+/*Centrer le bouton des catégories*/
+#categories-sheet {
+  margin-right: 8px !important;
+  margin-left: -8px !important;
+}
+
+.vvp-items-button-scroll-container {
+  overflow: visible !important;
+}
+
+/*Pour gérer Avis/Commandes/Compte*/
+#vvp-header {
+  display: flex !important;
+  align-items: center; !important;
+  justify-content: flex-start !important;
+  font-weight: bold !important;
+}
+
+#vvp-header a.a-link-normal {
+  position: relative;
+  padding: 0 0.15em;
+  text-decoration: none;
+}
+
+#vvp-header a.a-link-normal:last-of-type::after {
+  content: "";
+}
+
+/* Pour rabaisser le logo en mobile */
+#vvp-logo-link img {
+  margin-top: 10px;
+}
+
+.vvp-tab-content .vvp-reviews-table--heading-top {
+  margin-top: 10px;
+  border: 1px solid #ddd;
+}
+
+#vvp-reviews-divider {
+  display: none;
 }
 		`;
                     document.head.appendChild(mobileCssRR);
@@ -9308,7 +9355,7 @@ ${isPlus && apiOk ? `
                     urls: JSON.stringify(data),
                 });
 
-                return fetch(baseUrlPickme + "shyrka/asinsinfocmdpercent", {
+                return fetch(baseUrlPickme + "/shyrka/asinsinfocmdpercent", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/x-www-form-urlencoded"
