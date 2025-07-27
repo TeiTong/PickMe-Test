@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PickMe
 // @namespace    http://tampermonkey.net/
-// @version      2.6.9
+// @version      3.0.0
 // @description  Plugin d'aide à la navigation pour les membres du discord Amazon Vine FR
 // @author       Créateur/Codeur principal : MegaMan / Codeur secondaire : Sulff / Testeurs : Louise, JohnnyBGoody, L'avocat du Diable et Popato (+ du code de lelouch_di_britannia, FMaz008 et Thorvarium)
 // @match        https://www.amazon.fr/vine/vine-items
@@ -17,8 +17,8 @@
 // @match        https://vinepick.me/*
 // @exclude      https://www.amazon.fr/vine/vine-items?search=*
 // @icon         https://vinepick.me/img/PM-ICO-2.png
-// @updateURL    https://raw.githubusercontent.com/teitong/pickme-test/main/PickMe.user.js
-// @downloadURL  https://raw.githubusercontent.com/teitong/pickme-test/main/PickMe.user.js
+// @updateURL    https://raw.githubusercontent.com/teitong/pickme/main/PickMe.user.js
+// @downloadURL  https://raw.githubusercontent.com/teitong/pickme/main/PickMe.user.js
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
@@ -26,7 +26,7 @@
 // @grant        GM_listValues
 // @run-at       document-start
 // @noframes
-// @require      https://raw.githubusercontent.com/teitong/reviewremember/main/ReviewRememberPM.user.js??v=1.8.7
+// @require      https://raw.githubusercontent.com/teitong/reviewremember/main/ReviewRememberPM.user.js??v=1.9
 // @require      https://vinepick.me/scripts/jquery-3.7.1.min.js
 // @require      https://vinepick.me/scripts/heic2any.min.js
 //==/UserScript==
@@ -83,7 +83,7 @@ NOTES:
             /^https:\/\/www\.amazon\.fr\/gp\/buy\/thankyou/,
             /^https:\/\/www\.amazon\.fr\/checkout/,
             /^https:\/\/www\.amazon\.fr\/review\/create-review/,
-            /^https:\/\/www\.amazon\.fr\/reviews\/edit-review/
+            /^https:\/\/www\.amazon\.fr\/review\/edit-review/
         ].some(pattern => pattern.test(urlVine));
 
         if (isAmazonTargetPage) {
@@ -168,7 +168,7 @@ NOTES:
 
                 if (currentUrl !== previousUrl) {
                     clearInterval(interval); //On arrête la surveillance
-                    console.log("Changement d’URL détecté :", currentUrl);
+                    console.log("[PïckMe] Changement d’URL détecté :", currentUrl);
                     checkOut(currentUrl);
                 }
             }, 100); //Vérifie toutes les 100 ms
@@ -535,7 +535,7 @@ NOTES:
         //Fonction pour demander la permission et afficher la notification
         function requestNotification(title, text, icon, queue = null, page = null, pn = null, cn = null) {
             if (!("Notification" in window)) {
-                console.log("Ce navigateur ne supporte pas les notifications de bureau.");
+                console.log("[PïckMe] Ce navigateur ne supporte pas les notifications de bureau.");
                 return;
             }
             if (Notification.permission === "granted") {
@@ -1535,6 +1535,8 @@ NOTES:
 
             let colorblindEnabled = GM_getValue('colorblindEnabled', false);
 
+            let forceIos = GM_getValue('forceIos', false);
+
             let oldCheckoutEnabled = GM_getValue('oldCheckoutEnabled', false);
             let checkoutNewTab = GM_getValue('checkoutNewTab', false);
             let showCheckout = GM_getValue('showCheckout', false);
@@ -1699,6 +1701,8 @@ NOTES:
 
             GM_setValue("colorblindEnabled", colorblindEnabled);
 
+            GM_setValue("forceIos", forceIos);
+
             GM_setValue("oldCheckoutEnabled", oldCheckoutEnabled);
             GM_setValue("checkoutNewTab", checkoutNewTab);
             GM_setValue("showCheckout", showCheckout);
@@ -1838,7 +1842,7 @@ NOTES:
                 if (userInput && isValidUrl(userInput)) {
                     GM_setValue("callUrl", userInput);
                     callUrl = userInput;
-                    console.log("URL enregistrée avec succès :", userInput);
+                    console.log("[PïckMe] URL enregistrée avec succès :", userInput);
                 } else {
                     GM_setValue("callUrl", "");
                     callUrl = "";
@@ -2025,19 +2029,48 @@ NOTES:
                 });
             }
 
-            var storedProducts = GM_getValue("storedProducts");
-
-            //S'assurer que storedProducts est un objet
-            if (!storedProducts) {
-                storedProducts = {};
-            } else {
+            function getStoredProducts() {
                 try {
-                    storedProducts = JSON.parse(storedProducts);
+                    let raw = GM_getValue("storedProducts");
+
+                    // Vérifications supplémentaires avant le JSON.parse
+                    if (!raw || raw === "undefined" || typeof raw !== "string") {
+                        raw = '{}'; // Valeur de secours
+                    }
+                    return JSON.parse(raw);
                 } catch (error) {
-                    console.error("Erreur lors de la conversion de storedProducts en objet: ", error);
-                    storedProducts = {};
+                    console.error("Erreur lors de la récupération de storedProducts :", error);
+                    return {};
                 }
             }
+
+            function saveStoredProducts(products) {
+                GM_setValue("storedProducts", JSON.stringify(products));
+            }
+
+            var storedProducts = getStoredProducts();
+
+            function shouldRunPurge() {
+                const lastRun = GM_getValue("lastPurgeTimestamp", 0);
+                const now = Date.now();
+                const oneDay = 24 * 60 * 60 * 1000;
+
+                //Si plus de 24h sont passées depuis la dernière exécution
+                return (now - lastRun) > oneDay;
+            }
+
+            function runDailyPurge() {
+                if (shouldRunPurge()) {
+                    purgeStoredProducts();
+                    GM_setValue("lastPurgeTimestamp", Date.now());
+                    console.log("[PïckMe] Purge exécutée.");
+                }
+            }
+
+            //On purge les anciens produits une fois par jour pour optimiser le chargement des pages
+            const ITEM_EXPIRY = 7776000000; //90 jours en ms
+            runDailyPurge();
+            //purgeStoredProducts();
 
             //Définir des valeurs par défaut
             const defaultKeys = {
@@ -2247,7 +2280,7 @@ NOTES:
 
                 produits.forEach(produit => {
                     const asin = getProductAsin(produit);
-                    const storedProducts = JSON.parse(GM_getValue("storedProducts", '{}'));
+                    const storedProducts = getStoredProducts();
 
                     if (storedProducts.hasOwnProperty(asin)) {
                         const dateAjout = storedProducts[asin].dateAdded;
@@ -4367,6 +4400,7 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                 //Récupérer l'URL de l'image
                 const imgElement = element.querySelector('img');
                 const imgUrl = imgElement ? imgElement.src : null;
+                const currentDate = new Date();
 
                 //Récupérer l'enrollment
                 let enrollment = getEnrollment(element);
@@ -4884,7 +4918,6 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             const urlData = window.location.href.match(/(amazon\..+)\/vine\/vine-items(?:\?queue=)?(encore|last_chance|potluck|all_items)?.*?(?:&page=(\d+))?$/); //Country and queue type are extrapolated from this
             //End
             const MAX_COMMENT_LENGTH = 900;
-            const ITEM_EXPIRY = 7776000000; //90 days in ms
             const PRODUCT_IMAGE_ID = /.+\/(.*)\._SS[0-9]+_\.[a-z]{3,4}$/;
             //Icons for the Share button
             const btn_discordSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -15 130 130" style="height: 29px; padding: 4px 0px 4px 10px;">
@@ -4896,44 +4929,43 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             const btn_error = `<span class='a-button-discord-icon a-button-discord-error a-hires' style='background-position: -451px -422px;'></span>`;
             const btn_info = `<span class='a-button-discord-icon a-button-discord-info a-hires' style='background-position: -257px -354px;'></span>`;
 
-            //The modals related to error messages
-            const errorMessages = document.querySelectorAll('#vvp-product-details-error-alert, #vvp-out-of-inventory-error-alert');
-
             //PickMe add
             function purgeStoredProducts(purgeAll = false) {
-                //Charger les produits stockés ou initialiser comme un objet vide si aucun produit n'est trouvé
-                var storedProducts = JSON.parse(GM_getValue("storedProducts", '{}'));
-                const currentDate = new Date().getTime(); //Obtenir la date et l'heure courantes en millisecondes
+                let products = getStoredProducts();
+
+                const currentDate = new Date().getTime();
 
                 //Parcourir les clés (ASIN) dans storedProducts
-                for (const asin in storedProducts) {
-                    if (storedProducts.hasOwnProperty(asin)) { //Vérification pour éviter les propriétés héritées
+                for (const asin in products) {
+                    if (products.hasOwnProperty(asin)) { //Vérification pour éviter les propriétés héritées
                         const cacheKey = asin + '_c';
                         const favoriKey = asin + '_f';
                         if (purgeAll) {
                             //Purger le produit sans vérifier la date
-                            //if (Math.random() < 0.5) {
-                            delete storedProducts[asin];
-                            //}
+                            products = {};
+                            saveStoredProducts(products);
+                            storedProducts = products;
+                            return;
                         } else {
                             //Purger le produit en fonction de la date d'expiration
-                            const productDateAdded = new Date(storedProducts[asin].dateAdded).getTime(); //Convertir la date d'ajout en millisecondes
+                            const productDateAdded = new Date(products[asin].dateAdded).getTime(); //Convertir la date d'ajout en millisecondes
                             if (currentDate - productDateAdded >= ITEM_EXPIRY) { //Vérifier si le produit a expiré
-                                if (storedProducts[asin] && storedProducts[asin].enrollmentKey) {
-                                    const hideKey = storedProducts[asin].enrollmentKey + '_c';
+                                if (products[asin] && products[asin].enrollmentKey) {
+                                    const hideKey = products[asin].enrollmentKey + '_c';
                                     localStorage.removeItem(hideKey);
                                 }
                                 //On supprime l'ancienne clé pour cacher pour l'instant (utilisé avant la 1.14)
                                 localStorage.removeItem(cacheKey);
                                 localStorage.removeItem(favoriKey);
-                                delete storedProducts[asin]; //Supprimer le produit expiré
+                                delete products[asin]; //Supprimer le produit expiré
                             }
                         }
                     }
                 }
 
                 //Sauvegarder les modifications apportées à storedProducts
-                GM_setValue("storedProducts", JSON.stringify(storedProducts));
+                saveStoredProducts(products);
+                storedProducts = products;
             }
 
             function purgeHiddenObjects(purgeAll = false) {
@@ -4960,6 +4992,7 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                 }
                 const button = document.getElementById('purgeAllItems');
                 button.innerHTML = `Purger la mémoire ${afficherMemoireLocalStorage()}`;
+                alert("Suppression réussie.");
             }
 
             function purgeAllItems() {
@@ -4989,19 +5022,13 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
 
                     //Étape 3 : Purger la surbrillance
                     setTimeout(() => {
-                        //Charger les produits stockés ou initialiser comme un objet vide si aucun produit n'est trouvé
-                        var storedProducts = JSON.parse(GM_getValue("storedProducts", '{}'));
+                        let products = {};
 
-                        //Parcourir les clés (ASIN) dans storedProducts
-                        for (const asin in storedProducts) {
-                            if (storedProducts.hasOwnProperty(asin)) { //Vérification pour éviter les propriétés héritées
-                                //Purger le produit sans vérifier la date
-                                delete storedProducts[asin];
-                            }
-                        }
+                        saveStoredProducts(products);
+                        storedProducts = products; // <-- mise à jour globale
 
-                        //Sauvegarder les modifications apportées à storedProducts
-                        GM_setValue("storedProducts", JSON.stringify(storedProducts));
+                        saveStoredProducts(products);
+                        storedProducts = products;
 
                         button.innerHTML = `En cours (66%)`;
 
@@ -5022,9 +5049,6 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
 
                 }, 1000); //1 seconde avant de purger les favoris et les caches
             }
-
-            //On purge les anciens produits
-            purgeStoredProducts();
 
             //On affiche les pages en haut si l'option est activée
             if (paginationEnabled && apiOk) {
@@ -5868,19 +5892,21 @@ ${isPlus && apiOk ? `
                 });
 
                 document.getElementById('restoreData').addEventListener('click', async () => {
-                    const type = document.getElementById('restoreDataSelect').value; //all|settings|favhide|products
+                    const type = document.getElementById('restoreDataSelect').value; //all|settings|favhide|products|RRsettings|orders
                     const labels = {
                         all: "toutes les données",
-                        settings: "les paramètres",
+                        settings: "les paramètres PickMe",
                         favhide: "les produits favoris/cachés",
-                        products: "les temps/découverte produits"
+                        products: "les temps/découverte produits",
+                        orders: "les commandes",
+                        RRsettings: "les paramètres ReviewRemember"
                     };
 
                     if (confirm(`Êtes-vous sûr de vouloir restaurer ${labels[type]} ?`)) {
                         await restoreData(type);
                         popup.remove();
                         const cleanedLabel = labels[type].replace(/^\s*les\s+/i, '');
-                        console.log(`Restauration réussie (${cleanedLabel})`);
+                        console.log(`[PïckMe] Restauration réussie (${cleanedLabel})`);
                         alert(`Restauration réussie (${cleanedLabel})`);
                         window.location.reload();
                     }
@@ -5890,6 +5916,7 @@ ${isPlus && apiOk ? `
                     if (confirm("Êtes-vous sûr de vouloir supprimer les produits enregistrés pour la surbrillance ?")) {
                         purgeStoredProducts(true);
                     }
+                    alert("Tous les produits ont été supprimés.");
                 });
 
                 document.getElementById('purgeHiddenObjects').addEventListener('click', () => {
@@ -6077,7 +6104,9 @@ ${isPlus && apiOk ? `
           class="btn-like"
           ${isPremium || noBackup ? 'disabled' : ''}>
       <option value="all">Tout</option>
-      <option value="settings">Paramètres</option>
+      <option value="settings">Paramètres PickMe</option>
+      <option value="RRsettings">Paramètres ReviewRemember</option>
+      <option value="orders">Commandes</option>
       <option value="favhide">(Produits) Favoris/Cachés</option>
       <option value="products">(Produits) Temps/Bandeau découverte</option>
   </select>
@@ -7297,6 +7326,8 @@ ${isPlus && apiOk ? `
                 ajouterOptionCheckbox('columnEnabled', 'Rendre fixe le nombre de colonnes des produits');
                 ajouterOptionTexte('nbColumn', 'Nombre de colonnes', '5');
                 ajouterSeparateur();
+                ajouterOptionCheckbox('forceIos', 'Forcer la détection de iOS (à activer si certaines options ne fonctionnent pas car l\'appareil n\'est pas correctement détecté comme étant sous iOS)');
+                ajouterSeparateur();
                 ajouterOptionCheckbox('colorblindEnabled', 'Mode daltonien');
 
                 ajouterSousTitre('(Premium) ETV / Prix');
@@ -7609,7 +7640,7 @@ ${isPlus && apiOk ? `
             //Supprime les produits la depuis plus de 90 jours
             function purgeOldItems() {
                 const items = GM_getValue("config");
-                const storedProducts = JSON.parse(GM_getValue("storedProducts", '{}'));
+                const storedProducts = getStoredProducts();
                 const date = new Date().getTime();
 
                 for (const obj in items) {
@@ -7770,14 +7801,14 @@ ${isPlus && apiOk ? `
                             const data = await response.json()
                             asin = data.result?.variations?.[0]?.asin
                         } catch (error) {
-                            console.log('PickMe FastCmd error fetching variation ASIN', error)
+                            console.log('[PïckMe] FastCmd error fetching variation ASIN', error)
                             return
                         }
                     }
 
                     //On check que tout a une valeur
                     if (!recommendationId || !asin || !addressId || !legacyAddressId || !csrfToken || !dataFastCmd) {
-                        console.log('PickMe FastCmd : Impossible, données manquantes')
+                        console.log('[PïckMe] FastCmd : Impossible, données manquantes')
                         return
                     }
 
@@ -7812,7 +7843,7 @@ ${isPlus && apiOk ? `
                         var error = responseObject.error;
                         showOrderResult(result, error);
                     } catch (error) {
-                        console.log('PickMe FastCmd failed : ', error)
+                        console.log('[PïckMe] FastCmd failed : ', error)
                     }
                 }
 
@@ -8037,7 +8068,7 @@ ${isPlus && apiOk ? `
             async function verifierCleAPI() {
                 const cleAPI = GM_getValue("apiToken");
                 if (!cleAPI) {
-                    console.log("Aucune clé API n'est configurée.");
+                    console.log("[PïckMe] Aucune clé API n'est configurée.");
                     return false;
                 }
                 try {
@@ -8045,7 +8076,7 @@ ${isPlus && apiOk ? `
                     if (reponse && reponse.status === 200) {
                         return true;
                     } else {
-                        console.log("La clé API est invalide.");
+                        console.log("[PïckMe] La clé API est invalide.");
                         return false;
                     }
                 } catch (erreur) {
@@ -9099,7 +9130,7 @@ ${isPlus && apiOk ? `
                                     return response.text();
                                 })
                                     .then(data => {
-                                    console.log("Réponse du serveur :", data);
+                                    console.log("[PïckMe] Réponse du serveur :", data);
                                 })
                                     .catch(error => {
                                     console.error("Erreur lors de la requête :", error);
@@ -10209,7 +10240,7 @@ ${isPlus && apiOk ? `
                 try {
                     observer.observe(target, config);
                 } catch(error) {
-                    console.log('Aucun produit sur cette page');
+                    console.log('[PïckMe] Aucun produit sur cette page');
                     displayContent();
                 }
 
@@ -10249,7 +10280,7 @@ ${isPlus && apiOk ? `
                         try {
                             shippingObserver.observe(shippingModalTarget, shippingConfig);
                         } catch (error) {
-                            console.log('Erreur lors de l\'observation du modal de l\'adresse d\'expédition');
+                            console.log('[PïckMe] Erreur lors de l\'observation du modal de l\'adresse d\'expédition');
                         }
                     }
                 }
@@ -10769,15 +10800,42 @@ ${isPlus && apiOk ? `
             //End Wheel Fix
 
             //Sauvegarder/Restaurer
+            //Données RR
+            const RRKeys = [
+                'RREnabled',
+                'enableDateFunction',
+                'enableReviewStatusFunction',
+                'enableColorFunction',
+                'filterEnabled',
+                'profilEnabled',
+                'pageEnabled',
+                'emailEnabled',
+                'lastUpdateEnabled',
+                'targetPercentageEnabled',
+                'autoSaveEnabled',
+                'emailTemplates'
+            ];
+
             //Fonction pour récupérer les données de localStorage
             function getLocalStorageData() {
                 let data = {};
+
                 for (let i = 0; i < localStorage.length; i++) {
                     const key = localStorage.key(i);
-                    if (key.endsWith('_c') || key.endsWith('_f')) {
+
+                    if (
+                        key.endsWith('_c') ||
+                        key.endsWith('_f') ||
+                        key.startsWith('order_')
+                    ) {
                         data[key] = localStorage.getItem(key);
                     }
                 }
+
+                RRKeys.forEach(key => {
+                    data[key] = localStorage.getItem(key);
+                });
+
                 return data;
             }
 
@@ -10807,7 +10865,7 @@ ${isPlus && apiOk ? `
                         if (!excludedKeys.includes(key)) {
                             data[key] = GM_getValue(key);
                         } else {
-                            console.log(`Exclusion de la clé : ${key}`);
+                            console.log(`[PïckMe] Exclusion de la clé : ${key}`);
                         }
                     });
 
@@ -10837,7 +10895,7 @@ ${isPlus && apiOk ? `
                     }
 
                     const responseData = await response.json();
-                    console.log("Sauvegarde réussie");
+                    console.log("[PïckMe] Sauvegarde réussie");
 
                     //Gérer les données de réponse
                     if (responseData.lastSaveDate) {
@@ -10916,8 +10974,7 @@ ${isPlus && apiOk ? `
 
             //Intégration dans restoreData
             async function restoreData(type) {
-                //Empêche le rechargement / fermeture
-                const needBlockUnload = (type === "all" || type === "settings");
+                const needBlockUnload = (type === "all" || type === "settings" || type === "orders");
                 if (needBlockUnload) {
                     window.onbeforeunload = (e) => { e.preventDefault(); e.returnValue = ""; };
                 }
@@ -10934,6 +10991,7 @@ ${isPlus && apiOk ? `
                         headers: { "Content-Type": "application/x-www-form-urlencoded" },
                         body: formData.toString()
                     });
+
                     if (!response.ok) throw new Error(`Erreur restauration : ${response.status} ${response.statusText}`);
 
                     const data = await response.json();
@@ -10941,16 +10999,24 @@ ${isPlus && apiOk ? `
 
                     const favHideKeys = entries.filter(([k]) => k.endsWith("_c") || k.endsWith("_f"));
                     const settingsKeys = entries.filter(([k]) => !(k.endsWith("_c") || k.endsWith("_f")));
+                    const orderKeys = entries.filter(([k]) => k.startsWith("order_"));
                     const hasStoredProd = data.storedProducts !== undefined;
+
+                    const RRSettings = entries.filter(([k]) => RRKeys.includes(k));
 
                     const doSettings = (type === "all" || type === "settings");
                     const doStoredProd = (type === "all" || type === "products");
                     const doFavHide = (type === "all" || type === "favhide");
+                    const doRRSettings = (type === "all" || type === "RRsettings");
+                    const doOrders = (type === "all" || type === "orders");
 
                     let totalOps = 0;
                     if (doStoredProd && hasStoredProd) totalOps += 1;
                     if (doFavHide) totalOps += favHideKeys.length;
                     if (doSettings) totalOps += settingsKeys.length;
+                    if (doRRSettings) totalOps += RRSettings.length;
+                    if (doOrders) totalOps += orderKeys.length;
+
                     let done = 0;
 
                     if (doStoredProd && hasStoredProd) {
@@ -10969,25 +11035,48 @@ ${isPlus && apiOk ? `
                         }
                     }
 
-                    if (doFavHide) {
-                        const chunkSize = 500;
-                        for (let i = 0; i < favHideKeys.length; i += chunkSize) {
-                            const batch = favHideKeys.slice(i, i + chunkSize);
-
+                    if (doRRSettings) {
+                        const chunkSize = 50;
+                        for (let i = 0; i < RRSettings.length; i += chunkSize) {
+                            const batch = RRSettings.slice(i, i + chunkSize);
                             for (const [k, v] of batch) {
                                 localStorage.setItem(k, v);
                                 ++done;
                             }
-
                             update(done / totalOps * 100);
                             await new Promise(r => setTimeout(r, 0));
                         }
                     }
-                }
-                catch (err) {
+
+                    if (doFavHide) {
+                        const chunkSize = 500;
+                        for (let i = 0; i < favHideKeys.length; i += chunkSize) {
+                            const batch = favHideKeys.slice(i, i + chunkSize);
+                            for (const [k, v] of batch) {
+                                localStorage.setItem(k, v);
+                                ++done;
+                            }
+                            update(done / totalOps * 100);
+                            await new Promise(r => setTimeout(r, 0));
+                        }
+                    }
+
+                    if (doOrders) {
+                        const chunkSize = 100;
+                        for (let i = 0; i < orderKeys.length; i += chunkSize) {
+                            const batch = orderKeys.slice(i, i + chunkSize);
+                            for (const [k, v] of batch) {
+                                localStorage.setItem(k, v);
+                                ++done;
+                            }
+                            update(done / totalOps * 100);
+                            await new Promise(r => setTimeout(r, 0));
+                        }
+                    }
+
+                } catch (err) {
                     console.error("Erreur lors de la restauration :", err);
-                }
-                finally {
+                } finally {
                     if (needBlockUnload) window.onbeforeunload = null;
                 }
             }
@@ -11125,7 +11214,11 @@ ${isPlus && apiOk ? `
 
             //Pour savoir si l'utilisateur est sur iOS
             function isIOS() {
-                return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+                if (forceIos) {
+                    return true;
+                } else {
+                    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+                }
             }
 
             function insertButton() {
@@ -12076,7 +12169,7 @@ ${isPlus && apiOk ? `
                     const messageToCopy = getMessage(`**${baseTitle}**`);
 
                     navigator.clipboard.writeText(messageToCopy)
-                        .then(() => console.log('Résumé de la ronde copié dans le presse-papiers.'))
+                        .then(() => console.log('[PïckMe] Résumé de la ronde copié dans le presse-papiers.'))
                         .catch(err => console.error('Erreur lors de la copie dans le presse-papiers:', err));
 
                     alert("Copié dans le presse-papiers :\n\n" + message);
@@ -12246,13 +12339,22 @@ ${isPlus && apiOk ? `
             }
         }
 
+        function alertRR() {
+            if (localStorage.getItem('useRR') === '1') {
+                alert("ReviewRemember a été détecté !\n\nDans cette version de PickMe, ReviewRemember n'est plus nécessaire (vos données ne seront pas perdues) et ne sera d'ailleurs plus mis à jour.\n\nPour profiter des nouveautés de ReviewRemember, voici comment le désactiver ou le supprimer :\n\n1. Cliquez sur l’icône Tampermonkey dans la barre du navigateur.\n2. Choisissez \"Tableau de bord\".\n3. Repérez le script \"ReviewRemember\" dans la liste.\n4. Cliquez sur l’icône de corbeille pour le supprimer, ou décochez la case pour le désactiver.\n\nEn cas de problème, n'hésitez pas à demander de l'aide sur le discord Amazon Vine FR.");
+                localStorage.setItem('useRR', '0');
+            }
+        }
+
         //Fix iPhone
         if (document.readyState !== 'loading') {
             runPickMe();
+            alertRR();
         }
         else {
             document.addEventListener('DOMContentLoaded', function () {
                 runPickMe();
+                alertRR();
             });
         }
     } catch (err) {
