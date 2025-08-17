@@ -27,7 +27,7 @@
 // @run-at       document-start
 // @noframes
 // @inject-into  content
-// @require      https://raw.githubusercontent.com/teitong/reviewremember/main/ReviewRememberPM.user.js?v=1.9.3
+// @require      https://raw.githubusercontent.com/teitong/reviewremember/main/ReviewRememberiOS.user.js?v=1.9.5
 // @require      https://vinepick.me/scripts/jquery-3.7.1.min.js
 // @require      https://vinepick.me/scripts/heic2any.min.js
 //==/UserScript==
