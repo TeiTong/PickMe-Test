@@ -4170,7 +4170,7 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             }
 
             //Changement du texte des boutons dans Commandes et Avis
-            if (window.location.href.includes('orders') || window.location.href.includes('vine-reviews')) {
+            /*if (window.location.href.includes('orders') || window.location.href.includes('vine-reviews')) {
 
                 const normalize = (str) => str
                 .replace(/\u2019/g, "'") //apostrophe typographique → droite
@@ -4206,7 +4206,7 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                 //Observation dynamique du DOM
                 const observer = new MutationObserver(() => remplacerTextes());
                 observer.observe(document.body, { childList: true, subtree: true });
-            }
+            }*/
 
             //Gestion des thèmes couleurs
             //Thème
