@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         PickMe
 // @namespace    http://tampermonkey.net/
-// @version      3.0.0
-// @description  Plugin d'aide à la navigation pour les membres du discord Amazon Vine FR
+// @version      3.0.3
+// @description  Plugin d'aide à la navigation pour les membres du discord Amazon Vine FR : https://discord.gg/amazonvinefr
 // @author       Créateur/Codeur principal : MegaMan / Codeur secondaire : Sulff / Testeurs : Louise, JohnnyBGoody, L'avocat du Diable et Popato (+ du code de lelouch_di_britannia, FMaz008 et Thorvarium)
 // @match        https://www.amazon.fr/vine/vine-items
 // @match        https://www.amazon.fr/vine/vine-items?queue=*
@@ -17,8 +17,8 @@
 // @match        https://vinepick.me/*
 // @exclude      https://www.amazon.fr/vine/vine-items?search=*
 // @icon         https://vinepick.me/img/PM-ICO-2.png
-// @updateURL    https://raw.githubusercontent.com/teitong/pickme/main/PickMe.user.js
-// @downloadURL  https://raw.githubusercontent.com/teitong/pickme/main/PickMe.user.js
+// @updateURL    https://raw.githubusercontent.com/teitong/pickme-test/main/PickMe.user.js
+// @downloadURL  https://raw.githubusercontent.com/teitong/pickme-test/main/PickMe.user.js
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
@@ -26,7 +26,7 @@
 // @grant        GM_listValues
 // @run-at       document-start
 // @noframes
-// @require      https://raw.githubusercontent.com/teitong/reviewremember/main/ReviewRememberPM.user.js??v=1.9
+// @require      https://raw.githubusercontent.com/teitong/reviewremember/main/ReviewRememberiOS.user.js?v=1.9.4
 // @require      https://vinepick.me/scripts/jquery-3.7.1.min.js
 // @require      https://vinepick.me/scripts/heic2any.min.js
 //==/UserScript==
@@ -1231,7 +1231,6 @@ NOTES:
                 });
             }
         }
-
 
         if ((window.location.href === 'https://pickme.alwaysdata.net/search.php' || baseUrlPickme + 'search.php')) {
             function reloadFavPickmeweb() {
@@ -3780,35 +3779,6 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                 const apiOkRR = GM_getValue("apiToken", false);
                 //On test la clé API car désactivé (variable non défini) sur les pages de RR sinon
                 if (apiOkRR) {
-                    //Correction du mot sur la page
-                    var element = document.querySelector('#vvp-reviews-button--completed a.a-button-text');
-
-                    //Vérifie si l'élément existe et si son texte est "Vérifiées"
-                    if (element && element.textContent.trim() === "Vérifiées") {
-                        //Modifie le texte en "Vérifiés"
-                        element.textContent = "Vérifiés";
-                    }
-
-                    //Sélectionne tous les liens qui ont des IDs correspondant au pattern "a-autoid-*-announce" pour modifier le texte
-                    var links = document.querySelectorAll('.vvp-reviews-table--action-btn .a-button-text');
-
-                    //Boucle à travers chaque lien pour changer le texte
-                    links.forEach(function(link) {
-                        if (link.textContent.trim() === "Donner un avis sur l'article") {
-                            link.textContent = "Donner un avis";
-                        } else if (link.textContent.trim() === "Modifier le commentaire") {
-                            link.textContent = "Modifier l'avis";
-                        }
-                    });
-
-                    links = document.querySelectorAll('.vvp-orders-table--action-btn .a-button-text');
-
-                    //Boucle à travers chaque lien pour changer le texte
-                    links.forEach(function(link) {
-                        if (link.textContent.trim() === "Détails de la commande") {
-                            link.textContent = "Détails";
-                        }
-                    });
                     if (headerEnabled) {
                         var styleHeaderRR = document.createElement('style');
 
@@ -4196,6 +4166,45 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
 }
 `;
                 document.head.appendChild(noapiCss);
+            }
+
+            //Changement du texte des boutons dans Commandes et Avis
+            if (window.location.href.includes('orders') || window.location.href.includes('vine-reviews')) {
+
+                const normalize = (str) => str
+                .replace(/\u2019/g, "'") //apostrophe typographique → droite
+                .replace(/\u00A0/g, ' ') //espace insécable → espace
+                .trim();
+
+                const remplacements = {
+                    "Donner un avis sur l'article": "Donner un avis",
+                    "Détails de la commande": "Détails"
+                };
+
+                if (mobileEnabled) {
+                    remplacements = {
+                        "Voir la commande": "Commande",
+                        "Donner un avis": "Avis",
+                        "Donner un avis sur l'article": "Avis",
+                        "Voir le commentaire": "Commentaire"
+                    };
+                }
+
+                const remplacerTextes = () => {
+                    document.querySelectorAll('a.a-button-text').forEach(link => {
+                        const texteNormalisé = normalize(link.textContent);
+                        if (remplacements[texteNormalisé]) {
+                            link.textContent = remplacements[texteNormalisé];
+                        }
+                    });
+                };
+
+                //Exécution immédiate pour les éléments déjà présents
+                remplacerTextes();
+
+                //Observation dynamique du DOM
+                const observer = new MutationObserver(() => remplacerTextes());
+                observer.observe(document.body, { childList: true, subtree: true });
             }
 
             //Gestion des thèmes couleurs
@@ -4976,6 +4985,9 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             const btn_error = `<span class='a-button-discord-icon a-button-discord-error a-hires' style='background-position: -451px -422px;'></span>`;
             const btn_info = `<span class='a-button-discord-icon a-button-discord-info a-hires' style='background-position: -257px -354px;'></span>`;
 
+            //Recherche des messages d'erreurs
+            const errorMessages = document.querySelectorAll('#vvp-product-details-error-alert, #vvp-out-of-inventory-error-alert');
+
             //PickMe add
             function purgeStoredProducts(purgeAll = false) {
                 let products = getStoredProducts();
@@ -5098,9 +5110,18 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
             }
 
             //On affiche les pages en haut si l'option est activée
+            //Pour chercher '.a-text-center' ou 'nav.a-text-center'
+            function findPaginationBlock() {
+                // Cherche tous les éléments .a-text-center qui contiennent un ul.a-pagination
+                return Array.from(document.querySelectorAll('.a-text-center'))
+                    .find(el => el.querySelector('ul.a-pagination') && (
+                    el.tagName === 'NAV' || el.getAttribute('role') === 'navigation'
+                ));
+            }
+
             if (paginationEnabled && apiOk) {
                 //Sélection du contenu HTML du div source
-                const sourceElement = document.querySelector('.a-text-center');
+                const sourceElement = findPaginationBlock();
                 //Vérifier si l'élément source existe
                 if (sourceElement) {
 
@@ -5216,6 +5237,7 @@ li.a-last a span.larr {      /* Cible le span larr dans les li a-last */
                     }
                 }
             }
+
             //Menu PickMe
             //Ajoute le style CSS pour la fenêtre popup flottante
             const styleMenu = document.createElement('style');
@@ -8969,12 +8991,21 @@ ${isPlus && apiOk ? `
             //Remonte les commandes sur le serveur, au cas ou on ne les a pas
             function saveOrders() {
                 if (window.location.href.includes('orders')) {
+                    if (isMobile()) {
+                        //On met en gras l'ETV sur mobile
+                        document.querySelectorAll('.vvp-mobile-fair-market-value span').forEach(span => {
+                            span.style.fontWeight = 'bold';
+                        });
+                        //On enlève le gras du nom du produit pour harmoniser avec l'onglet Avis
+                        document.querySelectorAll('.vvp-order-product-title--non-link').forEach(el => {
+                            el.style.fontWeight = 'normal';
+                        });
+                    }
                     const listASINS = [];
                     //Extraction des données de chaque ligne de produit
                     document.querySelectorAll('.vvp-orders-table--row').forEach(row => {
                         let productUrl = row.querySelector('.vvp-orders-table--text-col a');
                         let asin = null;
-                        let notAsin = false;
                         if (productUrl) {
                             productUrl = productUrl.href;
                             asin = extractASIN(productUrl);
@@ -8986,7 +9017,30 @@ ${isPlus && apiOk ? `
                         }
                         //On ajoute chaque asin à la liste pour appeler les infos de commandes seulement si c'est un vrai ASIN et non un timestamp
                         if (isAsin(asin)) {
-                            listASINS.push("https://www.amazon.fr/dp/" + asin);
+                            const url = "https://www.amazon.fr/dp/" + asin;
+                            listASINS.push(url);
+                            //Sur mobile, on rend le nom du produit cliquable
+                            if (isMobile()) {
+                                if (isAsin(asin)) {
+                                    const url = "https://www.amazon.fr/dp/" + asin;
+                                    listASINS.push(url);
+
+                                    // Cibler le conteneur du nom (exemple via un sélecteur ou ID spécifique)
+                                    const titleContainer = row.querySelector('.vvp-order-product-title--non-link');
+
+                                    // Créer le lien
+                                    const link = document.createElement('a');
+                                    link.href = url;
+                                    link.target = '_blank';
+                                    link.rel = 'noopener';
+                                    link.textContent = titleContainer.textContent.trim();
+
+                                    // Nettoyer et insérer
+                                    titleContainer.innerHTML = '';
+                                    titleContainer.appendChild(link);
+                                }
+
+                            }
                         }
                         //Sur mobile on ne va pas plus loin
                         const timestampElement = row.querySelector('[data-order-timestamp]');
@@ -9227,6 +9281,40 @@ ${isPlus && apiOk ? `
                             //Le produit existe plus
                             const asinElement = row.querySelector('.vvp-reviews-table--text-col');
                             asin = asinElement ? asinElement.childNodes[0].nodeValue.trim() : null;
+                        }
+                        //On ajoute chaque asin à la liste pour appeler les infos de commandes
+                        listASINS.push("https://www.amazon.fr/dp/" + asin);
+                    });
+                    if (ordersInfos && ordersEnabled) {
+                        if (statsInReviews) {
+                            ordersPostCmd(listASINS, "reviews");
+                        }
+                        if (ordersPercent) {
+                            ordersPostPercent(listASINS);
+                        }
+
+                    }
+                }
+            }
+
+            function convertOrderFromReview() {
+                if (window.location.href.includes('vine-reviews')) {
+                    //Correction du mot sur la page
+                    var element = document.querySelector('#vvp-reviews-button--completed a.a-button-text');
+
+                    //Vérifie si l'élément existe et si son texte est "Vérifiées"
+                    if (element && element.textContent.trim() === "Vérifiées") {
+                        //Modifie le texte en "Vérifiés"
+                        element.textContent = "Vérifiés";
+                    }
+                    document.querySelectorAll('.vvp-reviews-table--row').forEach(row => {
+                        let asin;
+                        let productUrl = row.querySelector('.vvp-reviews-table--text-col a');
+                        if (productUrl) {
+                            productUrl = productUrl.href;
+                            asin = extractASIN(productUrl);
+                            const timestampElement = row.querySelector('[data-order-timestamp]');
+                            const timestamp = timestampElement.getAttribute('data-order-timestamp');
                             const key_asin = "order_" + asin;
                             if (localStorage.getItem(key_asin) === null) {
                                 const key_asin_timestamp = "order_" + timestamp;
@@ -9252,27 +9340,16 @@ ${isPlus && apiOk ? `
                                 }
                             }
                         }
-                        //On ajoute chaque asin à la liste pour appeler les infos de commandes
-                        listASINS.push("https://www.amazon.fr/dp/" + asin);
                     });
-                    if (ordersInfos && ordersEnabled) {
-                        if (statsInReviews) {
-                            ordersPostCmd(listASINS, "reviews");
-                        }
-                        if (ordersPercent) {
-                            ordersPostPercent(listASINS);
-                        }
-
-                    }
                 }
             }
 
-            if (ordersEnabled) {
-                //Les ASIN ne sont pas disponibles sur la page des commandes sur Mobile, donc on ne peut pas sauvegarder les commandes
-                saveOrders();
-                if (ordersInfos) {
-                    reviewOrders();
-                }
+            //On sauvegarde les commandes en local et on envoi au serveur si ordersEnabled est activé
+            saveOrders();
+            //Utile pour mobile, si on va sur les avis, on en profite pour retrouver les ASIN pour la page des Commandes car l'ASIN n'y est plus, on recherche via le timestamp
+            convertOrderFromReview();
+            if (ordersInfos) {
+                reviewOrders();
             }
 
             function ordersPost(data) {
@@ -9499,7 +9576,6 @@ ${isPlus && apiOk ? `
                         let displayHTML = "";
                         //On extrait en début de bloc pour alléger les appels
                         const { etv_real: etvReal, price } = orderData;
-
                         //On prépare les attributs data-* du wrapper
                         const wrapperAttrs = `class="order-item" data-price=${price !== null ? price : ''} data-etv=${etvReal !== null ? etvReal : ''}`;
 
@@ -9508,13 +9584,17 @@ ${isPlus && apiOk ? `
                                 if (etvReal !== null) {
                                     if (etvReal === "0.00") {
                                         if (price !== null) {
-                                            displayHTML = `<div ${wrapperAttrs}>${showPriceIcon ? `<span>${iconPrice}</span>` : ''}<span>${price}€</span><br><span>${iconETV}</span><span style="color: red;">${etvReal}€</span></div>`;
+                                            displayHTML = `<div ${wrapperAttrs}>${showPriceIcon ? `<span>${iconPrice}</span>` : ''}<span>${price}€</span><br>${showPriceIcon ? `<span>${iconETV}</span>` : ''}<span style="color: red;">${etvReal}€</span></div>`;
                                         } else {
                                             displayHTML = `<div ${wrapperAttrs}>${showPriceIcon ? `<span>${iconETV}</span><br>` : ''}<span style="color: red;">${etvReal}€</span></div>`;
                                         }
                                     } else {
                                         if (price !== null) {
-                                            displayHTML = `<div ${wrapperAttrs}>${showPriceIcon ? `<span>${iconPrice}${iconETV}</span><br>` : ''}<span>${etvReal}€</span></div>`;
+                                            if (etvReal !== price) {
+                                                displayHTML = `<div ${wrapperAttrs}>${showPriceIcon ? `<span>${iconPrice}</span>` : ''}<span>${price}€</span><br>${showPriceIcon ? `<span>${iconETV}</span>` : ''}<span>${etvReal}€</span></div>`;
+                                            } else {
+                                                displayHTML = `<div ${wrapperAttrs}>${showPriceIcon ? `<span>${iconPrice}${iconETV}</span><br>` : ''}<span>${etvReal}€</span></div>`;
+                                            }
                                         } else {
                                             displayHTML = `<div ${wrapperAttrs}>${showPriceIcon ? `<span>${iconETV}</span><br>` : ''}<span>${etvReal}€</span></div>`;
                                         }
@@ -9530,17 +9610,25 @@ ${isPlus && apiOk ? `
                                 }
                             }
                         } else {
-                            //Version “desktop”
+                            //Version desktop
                             if (showPrice) {
                                 if (etvReal !== null) {
                                     if (etvReal === "0.00") {
                                         if (price !== null) {
-                                            displayHTML = `<div ${wrapperAttrs}>${showPriceIcon ? `<span>${iconPrice}</span>` : ''}<span>${price}€</span> / <span>${iconETV}</span><span style="color: red;">${etvReal}€</span></div>`;
+                                            displayHTML = `<div ${wrapperAttrs}>${showPriceIcon ? `<span>${iconPrice}</span>` : ''}<span>${price}€</span> / ${showPriceIcon ? `<span>${iconETV}</span>` : ''}<span style="color: red;">${etvReal}€</span></div>`;
                                         } else {
                                             displayHTML = `<div ${wrapperAttrs}>${showPriceIcon ? `<span>${iconETV}</span>` : ''}<span style="color: red;">${etvReal}€</span></div>`;
                                         }
                                     } else {
-                                        displayHTML = `<div ${wrapperAttrs}>${showPriceIcon ? `<span>${iconPrice}${iconETV}</span>` : ''}<span>${etvReal}€</span></div>`;
+                                        if (price !== null) {
+                                            if (etvReal !== price) {
+                                                displayHTML = `<div ${wrapperAttrs}>${showPriceIcon ? `<span>${iconPrice}</span>` : ''}<span>${price}€</span> / ${showPriceIcon ? `<span>${iconETV}</span>` : ''}<span>${etvReal}€</span></div>`;
+                                            } else {
+                                                displayHTML = `<div ${wrapperAttrs}>${showPriceIcon ? `<span>${iconPrice}${iconETV}</span>` : ''}<span>${etvReal}€</span></div>`;
+                                            }
+                                        } else {
+                                            displayHTML = `<div ${wrapperAttrs}>${showPriceIcon ? `<span>${iconETV}</span>` : ''}<span>${etvReal}€</span></div>`;
+                                        }
                                     }
                                 } else {
                                     displayHTML = `<div ${wrapperAttrs}>${showPriceIcon ? `<span>${iconPrice}</span> <span>${price}€</span>` : `<span>${price}€ / N/A</span>`}</div>`;
@@ -9549,6 +9637,7 @@ ${isPlus && apiOk ? `
                                 displayHTML = `<div ${wrapperAttrs}>${showPriceIcon ? `<span>${iconETV}</span>` : ''}<span${etvReal === "0.00" ? ' style="color: red;"' : ''}>${etvReal}€</span></div>`;
                             }
                         }
+
 
 
                         //Ajouter le drapeau si flagEnabled et flagETV, et que flagCountry est renseigné
@@ -9707,10 +9796,10 @@ ${isPlus && apiOk ? `
                     let leftPadding = "11px";
                     if (tab == "reviews") {
                         sidePadding = mobileEnabled ? '30%' : '8px';
-                        leftPadding = mobileEnabled ? '30%' : '8px';
+                        leftPadding = mobileEnabled ? '35%' : '8px';
                     } else {
-                        sidePadding = mobileEnabled ? '30%' : '0px';
-                        leftPadding = mobileEnabled ? '30%' : '11px';
+                        sidePadding = mobileEnabled ? '31%' : '0px';
+                        leftPadding = mobileEnabled ? '34%' : '11px';
                     }
                     ['success', 'error'].forEach(type => {
                         const icon = document.createElement('img');
